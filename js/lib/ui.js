@@ -1,0 +1,90 @@
+// 要素を作るやつ
+// h('a', { href: '/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
+export function h(tag, props = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(props ?? {})) {
+    if (value == null || value === false) continue;
+    if (key === 'class') {
+      el.className = value;
+    } else if (key === 'dataset') {
+      Object.assign(el.dataset, value);
+    } else if (key === 'style' && typeof value === 'object') {
+      Object.assign(el.style, value);
+    } else if (key === 'value') {
+      el.value = value;
+    } else {
+      if (key.startsWith('on') && typeof value === 'function') {
+        el.addEventListener(key.slice(2), value);
+      } else {
+        if (key in el && typeof value !== 'string') el[key] = value;
+        else el.setAttribute(key, value === true ? '' : String(value));
+      }
+    }
+  }
+  add(el, children);
+  return el;
+}
+
+function add(el, children) {
+  for (const c of children) {
+    if (c == null || c === false || c === '') continue;
+    if (Array.isArray(c)) add(el, c);
+    else el.append(c instanceof Node ? c : String(c));
+  }
+}
+
+let toastTimer;
+export function toast(message, kind = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.className = `toast toast--${kind} is-visible`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('is-visible'), kind === 'error' ? 7000 : 3500); // エラーは長めに出す
+}
+
+// supabaseのエラーが英語なので日本語にする
+// 出てきたのを見つけたら足していく
+export function errText(err) {
+  const msg = String(err?.message ?? err ?? '');
+  const table = [
+    [/Invalid login credentials/i, 'メールアドレスかパスワードが違います'],
+    [/Email not confirmed/i, 'メールの確認がまだです。届いたメールのリンクを開いてください'],
+    [/User already registered/i, 'このメールアドレスはもう登録されています'],
+    [/Password should be at least/i, 'パスワードが短すぎます'],
+  ];
+  for (const [re, text] of table) {
+    if (re.test(msg)) {
+      return text;
+    }
+  }
+  return msg || 'うまくいきませんでした';
+}
+
+let seq = 0;
+export function field(label, control, { help } = {}) {
+  control.id ||= `f${++seq}`;
+  if (help) control.setAttribute('aria-describedby', `${control.id}-help`);
+  return h('div', { class: 'field' },
+    h('label', { class: 'field__label', for: control.id }, label),
+    control,
+    help ? h('p', { class: 'field__help', id: `${control.id}-help` }, help) : null,
+  );
+}
+
+// ボタンを押してる間「保存中…」とかにして押せなくする（二重送信防止）
+export async function busy(btn, text, fn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = text;
+    try {
+        return await fn();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+    }
+}
+
+// kind: info / warn / error / ok
+export function notice(kind, ...children) {
+  return h('div', { class: `note note--${kind}` }, ...children);
+}

@@ -1,6 +1,55 @@
-body {
-  font-family: sans-serif;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 16px;
+/* とりあえずの見た目。あとでちゃんとする */
+:root {
+  --line: #ddd;
+  --gray: #777;
+  --accent: #2b6cb0;
+  --red: #c53030;
 }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  line-height: 1.7;
+  color: #222;
+  background: #fafafa;
+}
+a { color: var(--accent); }
+
+.site-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--line); }
+.brand { font-weight: bold; font-size: 1.3rem; color: #222; text-decoration: none; }
+.site-nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.site-main { max-width: 960px; margin: 0 auto; padding: 16px; }
+
+.page.narrow { max-width: 600px; margin: 0 auto; }
+.muted { color: var(--gray); }
+.block { padding: 12px 0; border-bottom: 1px solid var(--line); }
+
+.note { padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; background: #eef4fb; }
+.note--error { background: #fdecea; color: var(--red); }
+.note--warn { background: #fff7e0; }
+.note ul { margin: 0; padding-left: 1.2em; }
+
+.btn { display: inline-block; padding: 6px 16px; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #222; font: inherit; text-decoration: none; cursor: pointer; }
+.btn:disabled { opacity: .5; }
+.btn--ink { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], select, textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 16px; /* 16pxより小さいとiPhoneで入力するとき勝手にズームされる */
+}
+.field { margin: 0 0 16px; padding: 0; border: 0; }
+.field__label { display: block; font-weight: bold; margin-bottom: 4px; }
+.field__help { margin: 4px 0 0; font-size: 0.85rem; color: var(--gray); }
+.form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.auth__alt { margin-top: 24px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 8px 16px; background: #333; color: #fff; border-radius: 4px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.is-visible { opacity: 1; }
+.toast--error { background: var(--red); }

@@ -11,3 +11,5 @@ export const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     detectSessionInUrl: true
   }
 });
+
+export const siteUrl = () => location.origin + location.pathname;

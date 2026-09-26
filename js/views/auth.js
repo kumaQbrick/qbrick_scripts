@@ -1,0 +1,104 @@
+import { sb, siteUrl } from '../lib/supabase.js';
+import { state, setUser, isLoggedIn } from '../lib/state.js';
+import { h, field, errText, notice, busy } from '../lib/ui.js';
+
+const MIN_PASSWORD = 8;
+
+const page = (title, ...children) =>
+  h('section', { class: 'page narrow auth' }, h('h1', {}, title), ...children);
+
+// エラーが1個ならそのまま、2個以上なら箇条書き
+const showErrors = (box, list) =>
+  box.replaceChildren(notice('error', list.length > 1 ? h('ul', {}, ...list.map((p) => h('li', {}, p))) : list[0]));
+
+/* ===== ログイン ===== */
+export async function loginView({ go }) {
+  if (isLoggedIn()) {
+    return page('ログイン', h('p', {}, `${state.profile?.display_name ?? ''} でログイン中です。`), h('p', {}, h('a', { href: '/' }, '一覧へ')));
+  }
+  const email = h('input', { type: 'email', autocomplete: 'email', required: true });
+  const password = h('input', { type: 'password', autocomplete: 'current-password', required: true });
+  const msg = h('div', { role: 'alert' });
+  const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'ログイン');
+
+  return page('ログイン',
+    h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        msg.replaceChildren();
+        await busy(submit, 'ログイン中…', async () => {
+          const { data, error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: password.value });
+          if (error) return showErrors(msg, [errText(error)]);
+          await setUser(data.user);
+          go('/');
+        });
+      },
+    },
+      field('メールアドレス', email),
+      field('パスワード', password),
+      msg,
+      h('div', { class: 'form-actions' }, submit),
+    ),
+    h('p', { class: 'auth__alt' }, 'アカウントがない人は ', h('a', { href: '/signup' }, '登録')),
+  );
+}
+
+/* ===== 登録 ===== */
+export async function signupView({ go }) {
+  if (isLoggedIn()) return loginView({ go });
+
+  const name = h('input', { type: 'text', maxlength: 30, autocomplete: 'nickname', required: true });
+  const email = h('input', { type: 'email', autocomplete: 'email', required: true });
+  const password = h('input', { type: 'password', autocomplete: 'new-password', minlength: MIN_PASSWORD, required: true });
+  const msg = h('div', { role: 'alert' });
+  const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, '登録');
+
+  const form = h('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      msg.replaceChildren();
+      const problems = [];
+      if (!name.value.trim()) problems.push('名前が空です');
+      if (!email.value.trim()) problems.push('メールアドレスが空です');
+      if (password.value.length < MIN_PASSWORD) problems.push(`パスワードは${MIN_PASSWORD}文字以上`);
+
+      if (problems.length == 0) {
+        await busy(submit, '登録中…', async () => {
+          const { data, error } = await sb.auth.signUp({
+            email: email.value.trim(),
+            password: password.value,
+            options: {
+              data: { display_name: name.value.trim() },
+              emailRedirectTo: siteUrl(),
+            },
+          });
+          if (!error) {
+            if (data.session) {
+              // Supabaseでメール確認をオフにしてるとここに来る
+              await setUser(data.user);
+              go('/');
+            } else {
+              // メール確認オンのとき
+              form.replaceWith(h('div', {},
+                h('p', {}, `${email.value.trim()} に確認メールを送りました。リンクを開くと登録完了です。`),
+                h('p', { class: 'muted' }, '来ないときは迷惑メールも見てください。'),
+              ));
+            }
+          } else {
+            showErrors(msg, [errText(error)]);
+          }
+        });
+      } else {
+        showErrors(msg, problems);
+      }
+    },
+  },
+    field('名前', name),
+    field('メールアドレス', email),
+    field('パスワード', password, { help: `${MIN_PASSWORD}文字以上` }),
+    msg,
+    h('div', { class: 'form-actions' }, submit),
+  );
+
+  return page('登録', form, h('p', { class: 'auth__alt' }, 'アカウントがある人は ', h('a', { href: '/login' }, 'ログイン')));
+}
