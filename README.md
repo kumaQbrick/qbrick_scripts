@@ -1,3 +1,12 @@
 # 脚本棚
 
-映研の脚本置き場（作り中）
+熊大映研 Qbrick 制作班の脚本置き場。作り中
+
+- 画面: 素の HTML / CSS / JS（ビルドなし）
+- DB・ログイン: Supabase
+
+## 動かし方
+
+1. Supabase でプロジェクトを作って、SQL Editor で `supabase/schema.sql` を流す
+2. `js/config.js` に Project URL と publishable key を書く
+3. `python3 -m http.server 8000` で http://localhost:8000/ を開く
