@@ -4,7 +4,7 @@ import { h, field, errText, toast, busy } from '../lib/ui.js';
 
 export async function accountView({ go }) {
   if (!isLoggedIn()) {
-    return h('section', { class: 'page narrow' }, h('h1', {}, 'アカウント'), h('p', {}, h('a', { class: 'btn btn--ink', href: '/login' }, 'ログイン')));
+    return h('section', { class: 'page narrow' }, h('h1', {}, 'アカウント'), h('p', {}, h('a', { class: 'btn btn--ink', href: '#/login' }, 'ログイン')));
   }
   const p = state.profile;
 

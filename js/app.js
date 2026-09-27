@@ -5,7 +5,8 @@ import { h, notice } from './lib/ui.js'
 import { loginView, signupView } from './views/auth.js';
 import { accountView } from './views/account.js';
 
-// URLのパスで画面を切り替える
+// GitHub Pagesだとサーバー側でパスを振り分けられないので#で画面を切り替える
+// （最初普通のURLでやってて全部404になった）
 const routes = [
   [/^\/$/, homeView, '一覧'],
   [/^\/login$/,  loginView, 'ログイン'],
@@ -17,12 +18,13 @@ const main = document.getElementById('main');
 let ready = false;
 
 export function go(path) {
-  history.pushState(null, '', path);
-  render();
+    if (location.hash === `#${path}`) render();
+    else location.hash = path;
 }
 
-function parsePath() {
-  return { path: location.pathname, query: new URLSearchParams(location.search) };
+function parseHash() {
+  const [path, qs = ''] = (location.hash.replace(/^#/, '') || '/').split('?');
+  return { path: path || '/', query: new URLSearchParams(qs) };
 }
 
 const simplePage = (title, ...body) =>
@@ -33,7 +35,7 @@ function homeView() {
 }
 
 async function render() {
-  const { path, query } = parsePath();
+  const { path, query } = parseHash();
   const route = routes.find(([re]) => re.test(path));
 
   if (route) {
@@ -44,13 +46,13 @@ async function render() {
         result = await view({ params: path.match(re).slice(1), query, go, rerender: render });
       } catch (err) {
         console.error(err);
-        result = simplePage('表示できませんでした', notice('error', String(err?.message ?? err)), h('p', {}, h('a', { href: '/' }, '一覧へ')));
+        result = simplePage('表示できませんでした', notice('error', String(err?.message ?? err)), h('p', {}, h('a', { href: '#/' }, '一覧へ')));
       }
       console.log('render', path, result)
 
       mount(result, title);
   } else {
-    mount(simplePage('ページがありません', h('p', {}, h('a', { href: '/' }, '一覧へ'))), 'ページがありません');
+    mount(simplePage('ページがありません', h('p', {}, h('a', { href: '#/' }, '一覧へ'))), 'ページがありません');
   }
 }
 
@@ -62,9 +64,9 @@ function mount(el, title) {
 
 function renderNav() {
   var links = [
-    h('a', { href: '/' }, '一覧'),
-    state.user ? h('a', { href: '/account', class: 'nav-me' }, state.profile?.display_name ?? 'アカウント')
-               : h('a', { href: '/login' }, 'ログイン'),
+    h('a', { href: '#/' }, '一覧'),
+    state.user ? h('a', { href: '#/account', class: 'nav-me' }, state.profile?.display_name ?? 'アカウント')
+               : h('a', { href: '#/login' }, 'ログイン'),
   ];
   document.getElementById('site-nav').replaceChildren(...links.filter(Boolean));
 }
@@ -90,18 +92,9 @@ async function init() {
   const { data } = await sb.auth.getSession();
   await setUser(data.session?.user ?? null);
 
-  // リンクを押したときにページを読み直さない
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('a');
-    if (a && a.getAttribute('href')?.startsWith('/')) {
-      e.preventDefault();
-      go(a.getAttribute('href'));
-    }
-  });
-
   onStateChange(renderNav);
   renderNav();
-  window.addEventListener('popstate', render);
+  window.addEventListener('hashchange', render);
   ready = true;
   render();
 }

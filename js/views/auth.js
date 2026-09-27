@@ -14,7 +14,7 @@ const showErrors = (box, list) =>
 /* ===== ログイン ===== */
 export async function loginView({ go }) {
   if (isLoggedIn()) {
-    return page('ログイン', h('p', {}, `${state.profile?.display_name ?? ''} でログイン中です。`), h('p', {}, h('a', { href: '/' }, '一覧へ')));
+    return page('ログイン', h('p', {}, `${state.profile?.display_name ?? ''} でログイン中です。`), h('p', {}, h('a', { href: '#/' }, '一覧へ')));
   }
   const email = h('input', { type: 'email', autocomplete: 'email', required: true });
   const password = h('input', { type: 'password', autocomplete: 'current-password', required: true });
@@ -39,7 +39,7 @@ export async function loginView({ go }) {
       msg,
       h('div', { class: 'form-actions' }, submit),
     ),
-    h('p', { class: 'auth__alt' }, 'アカウントがない人は ', h('a', { href: '/signup' }, '登録')),
+    h('p', { class: 'auth__alt' }, 'アカウントがない人は ', h('a', { href: '#/signup' }, '登録')),
   );
 }
 
@@ -100,5 +100,5 @@ export async function signupView({ go }) {
     h('div', { class: 'form-actions' }, submit),
   );
 
-  return page('登録', form, h('p', { class: 'auth__alt' }, 'アカウントがある人は ', h('a', { href: '/login' }, 'ログイン')));
+  return page('登録', form, h('p', { class: 'auth__alt' }, 'アカウントがある人は ', h('a', { href: '#/login' }, 'ログイン')));
 }

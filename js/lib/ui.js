@@ -1,5 +1,5 @@
 // 要素を作るやつ
-// h('a', { href: '/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
+// h('a', { href: '#/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(props ?? {})) {

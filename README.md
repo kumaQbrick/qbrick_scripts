@@ -2,7 +2,7 @@
 
 熊大映研 Qbrick 制作班の脚本置き場。作り中
 
-- 画面: 素の HTML / CSS / JS（ビルドなし）
+- 画面: 素の HTML / CSS / JS（ビルドなし）。GitHub Pages で公開
 - DB・ログイン: Supabase
 
 ## 動かし方
