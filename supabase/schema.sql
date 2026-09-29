@@ -96,3 +96,36 @@ create policy "scripts: insert by member" on public.scripts
   with check (owner_id = (select auth.uid()));
 
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
+
+-- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
+-- 非公開バケット。画面からは期限つきの署名URLで読む
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('scripts', 'scripts', false, 20971520, array['application/pdf'])  -- 20MB
+on conflict (id) do nothing;
+
+create policy "script pdf: upload own folder" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'scripts'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+-- その PDF を使っている脚本を読める人（scripts の RLS がそのまま効く）
+create policy "script pdf: read" on storage.objects
+  for select using (
+    bucket_id = 'scripts'
+    and (
+      exists (select 1 from public.scripts s where s.pdf_path = objects.name)
+      or (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+  );
+
+create policy "script pdf: delete own or admin" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'scripts'
+    and (
+      (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+  );

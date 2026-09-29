@@ -12,4 +12,6 @@ export const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   }
 });
 
+export const BUCKET = 'scripts';
+
 export const siteUrl = () => location.origin + location.pathname;

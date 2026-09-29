@@ -33,6 +33,12 @@ function add(el, children) {
   }
 }
 
+export function fmtSize(bytes) {
+    if (bytes == null) return '';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
 let toastTimer;
 export function toast(message, kind = 'info') {
   const el = document.getElementById('toast');
@@ -68,6 +74,19 @@ export function field(label, control, { help } = {}) {
     h('label', { class: 'field__label', for: control.id }, label),
     control,
     help ? h('p', { class: 'field__help', id: `${control.id}-help` }, help) : null,
+  );
+}
+
+export function radioGroup(name, legend, options, current) {
+  return h('fieldset', { class: 'field' },
+    h('legend', { class: 'field__label' }, legend),
+    h('div', { class: 'choices' },
+      ...options.map(([value, label, desc]) =>
+        h('label', { class: 'choice' },
+          h('input', { type: 'radio', name, value, checked: value === current }),
+          h('span', {}, h('b', {}, label), desc ? h('small', {}, desc) : null),
+        )),
+    ),
   );
 }
 

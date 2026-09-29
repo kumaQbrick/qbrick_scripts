@@ -2,6 +2,7 @@ import { sb, isConfigured } from './lib/supabase.js';
 import { state, setUser, onStateChange } from './lib/state.js';
 import { h, notice } from './lib/ui.js'
 
+import { formView } from './views/form.js';
 import { loginView, signupView } from './views/auth.js';
 import { accountView } from './views/account.js';
 
@@ -9,6 +10,7 @@ import { accountView } from './views/account.js';
 // （最初普通のURLでやってて全部404になった）
 const routes = [
   [/^\/$/, homeView, '一覧'],
+  [/^\/new$/, formView, '投稿'],
   [/^\/login$/,  loginView, 'ログイン'],
   [/^\/signup$/, signupView, '登録'],
   [/^\/account$/, accountView, 'アカウント'],
@@ -65,6 +67,7 @@ function mount(el, title) {
 function renderNav() {
   var links = [
     h('a', { href: '#/' }, '一覧'),
+    state.user && h('a', { href: '#/new', class: 'nav-post' }, '投稿する'),
     state.user ? h('a', { href: '#/account', class: 'nav-me' }, state.profile?.display_name ?? 'アカウント')
                : h('a', { href: '#/login' }, 'ログイン'),
   ];
