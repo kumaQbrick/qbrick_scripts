@@ -59,6 +59,30 @@ input[type=text], input[type=email], input[type=password], input[type=number], i
 .input--short { max-width: 7em; }
 .form-error:empty { display: none; }
 
+/* 一覧 */
+.shelf { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.shelf__link { display: flex; flex-direction: column; height: 100%; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; color: #222; text-decoration: none; }
+.shelf__link:hover { border-color: var(--accent); }
+.shelf__title { font-weight: bold; }
+.shelf__meta { font-size: 0.8rem; color: var(--gray); }
+.empty { padding: 40px 0; text-align: center; color: var(--gray); }
+
+/* 詳細 */
+.detail__head h1 { margin: 0; }
+.detail__head p { margin: 0 0 16px; color: var(--gray); }
+.detail__body { display: grid; gap: 24px; }
+@media (min-width: 800px) {
+  .detail__body { grid-template-columns: 220px 1fr; }
+}
+.facts { margin: 0; font-size: 0.9rem; }
+.facts > div { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.facts dt { width: 6em; flex: none; color: var(--gray); }
+.facts dd { margin: 0; }
+.synopsis { white-space: pre-wrap; }
+.reader { background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.reader__bar { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+.reader__file { flex: 1; color: var(--gray); word-break: break-all; }
+
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 8px 16px; background: #333; color: #fff; border-radius: 4px; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .toast.is-visible { opacity: 1; }
 .toast--error { background: var(--red); }

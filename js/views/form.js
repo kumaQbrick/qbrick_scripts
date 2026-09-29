@@ -124,11 +124,11 @@ export async function formView({ params, go }) {
       }
 
       submit.textContent = '保存中…';
-      const { error } = await sb.from('scripts').insert(values);
+      const { data, error } = await sb.from('scripts').insert(values).select('id').single();
       if (error) throw error;
       uploaded = null;
       toast('投稿しました');
-      go('/');
+      go(`/s/${data.id}`);
     } catch (err) {
       console.error(err);
       // 途中で失敗したら上げたPDFを消しとく

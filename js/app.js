@@ -2,14 +2,19 @@ import { sb, isConfigured } from './lib/supabase.js';
 import { state, setUser, onStateChange } from './lib/state.js';
 import { h, notice } from './lib/ui.js'
 
+import { listView } from './views/list.js';
+import { detailView } from './views/detail.js';
 import { formView } from './views/form.js';
 import { loginView, signupView } from './views/auth.js';
 import { accountView } from './views/account.js';
 
+const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+
 // GitHub Pagesだとサーバー側でパスを振り分けられないので#で画面を切り替える
 // （最初普通のURLでやってて全部404になった）
 const routes = [
-  [/^\/$/, homeView, '一覧'],
+  [/^\/$/, listView, '一覧'],
+  [new RegExp(`^/s/${UUID}$`), detailView, '脚本'],
   [/^\/new$/, formView, '投稿'],
   [/^\/login$/,  loginView, 'ログイン'],
   [/^\/signup$/, signupView, '登録'],
@@ -17,6 +22,7 @@ const routes = [
 ];
 
 const main = document.getElementById('main');
+let renderToken = 0;
 let ready = false;
 
 export function go(path) {
@@ -32,11 +38,8 @@ function parseHash() {
 const simplePage = (title, ...body) =>
   h('section', { class: 'page narrow' }, h('h1', {}, title), ...body);
 
-function homeView() {
-  return simplePage('脚本棚', h('p', {}, '一覧はこれから'));
-}
-
 async function render() {
+  const token = ++renderToken;
   const { path, query } = parseHash();
   const route = routes.find(([re]) => re.test(path));
 
@@ -52,7 +55,11 @@ async function render() {
       }
       console.log('render', path, result)
 
-      mount(result, title);
+      // 読み込み中に別の画面へ移ってたら捨てる
+      // ↑これないと連打したとき前の画面が後から出てくる
+      if (token === renderToken) {
+        mount(result instanceof Node ? result : result.el, result?.title ?? title);
+      }
   } else {
     mount(simplePage('ページがありません', h('p', {}, h('a', { href: '#/' }, '一覧へ'))), 'ページがありません');
   }

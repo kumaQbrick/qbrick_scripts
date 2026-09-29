@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { state, setUser, refreshProfile, isLoggedIn } from '../lib/state.js';
-import { h, field, errText, toast, busy } from '../lib/ui.js';
+import { h, field, errText, toast, busy, fmtDate } from '../lib/ui.js';
 
 export async function accountView({ go }) {
   if (!isLoggedIn()) {
@@ -44,7 +44,7 @@ export async function accountView({ go }) {
 
   return h('section', { class: 'page narrow' },
     h('h1', {}, 'アカウント'),
-    h('p', { class: 'muted' }, state.user.email),
+    h('p', { class: 'muted' }, `${state.user.email}（${fmtDate(p?.created_at)} 登録）`),
     h('section', { class: 'block' }, nameForm),
     h('section', { class: 'block' },
       logout,

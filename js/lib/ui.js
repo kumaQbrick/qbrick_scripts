@@ -1,3 +1,5 @@
+import { LENGTHS } from '../config.js';
+
 // 要素を作るやつ
 // h('a', { href: '#/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
 export function h(tag, props = {}, ...children) {
@@ -33,10 +35,24 @@ function add(el, children) {
   }
 }
 
+// 0埋め
+function pad(n) {
+  return n < 10 ? '0' + n : '' + n;
+}
+export function fmtDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate());
+}
 export function fmtSize(bytes) {
     if (bytes == null) return '';
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
     return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+export function lengthText(s) {
+  const len = LENGTHS[s.length_category]?.label ?? '';
+  return s.runtime_minutes ? `${len} ${s.runtime_minutes}分` : len;
 }
 
 let toastTimer;

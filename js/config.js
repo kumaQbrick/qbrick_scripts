@@ -37,3 +37,4 @@ export const VISIBILITIES = {
 
 // supabase/schema.sql の file_size_limit と合わせる（片方だけ変えるとアップロードで怒られる）
 export const MAX_PDF_MB = 20;
+export const SIGNED_URL_SECONDS = 60 * 60; // 1時間
