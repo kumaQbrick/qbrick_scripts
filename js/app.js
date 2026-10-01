@@ -7,6 +7,7 @@ import { detailView } from './views/detail.js';
 import { formView } from './views/form.js';
 import { loginView, signupView } from './views/auth.js';
 import { accountView } from './views/account.js';
+//import { testView } from './views/test.js';
 
 const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
 
@@ -19,10 +20,12 @@ const routes = [
   [/^\/login$/,  loginView, 'ログイン'],
   [/^\/signup$/, signupView, '登録'],
   [/^\/account$/, accountView, 'アカウント'],
+  //[/^\/test$/, testView, 'てすと'],
 ];
 
 const main = document.getElementById('main');
 let renderToken = 0;
+let destroyCurrent = null;
 let ready = false;
 
 export function go(path) {
@@ -43,6 +46,9 @@ async function render() {
   const { path, query } = parseHash();
   const route = routes.find(([re]) => re.test(path));
 
+  destroyCurrent?.();
+  destroyCurrent = null;
+
   if (route) {
       const [re, view, title] = route;
 
@@ -53,11 +59,14 @@ async function render() {
         console.error(err);
         result = simplePage('表示できませんでした', notice('error', String(err?.message ?? err)), h('p', {}, h('a', { href: '#/' }, '一覧へ')));
       }
-      console.log('render', path, result)
+      //console.log('render', path, result)
 
       // 読み込み中に別の画面へ移ってたら捨てる
       // ↑これないと連打したとき前の画面が後から出てくる
-      if (token === renderToken) {
+      if (token !== renderToken) {
+        result?.destroy?.();
+      } else {
+        destroyCurrent = result?.destroy ?? null;
         mount(result instanceof Node ? result : result.el, result?.title ?? title);
       }
   } else {

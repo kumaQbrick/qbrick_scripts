@@ -4,6 +4,7 @@
 
 - 画面: 素の HTML / CSS / JS（ビルドなし）。GitHub Pages で公開
 - DB・ログイン・PDF置き場: Supabase
+- PDFの表示: pdf.js（`vendor/` に入れてる）
 
 ## 動かし方
 

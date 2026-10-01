@@ -2,6 +2,7 @@ import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../conf
 import { sb, BUCKET } from '../lib/supabase.js';
 import { isLoggedIn } from '../lib/state.js';
 import { h, fmtDate, fmtSize, lengthText, errText, notice } from '../lib/ui.js';
+import { pdfViewer } from '../lib/pdfviewer.js';
 
 export async function detailView({ params, go }) {
   const [id] = params;
@@ -24,16 +25,19 @@ export async function detailView({ params, go }) {
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS),
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS, { download: s.pdf_filename }),
   ]);
+  let viewer = null;
   let reader;
   if (!view.data?.signedUrl) {
     reader = notice('error', 'PDFを読み込めませんでした。', view.error ? errText(view.error) : '');
   } else {
+    viewer = pdfViewer(view.data.signedUrl);
     reader = h('div', { class: 'reader' },
       h('div', { class: 'reader__bar' },
         h('span', { class: 'reader__file' }, s.pdf_filename, s.pdf_size ? ` (${fmtSize(s.pdf_size)})` : ''),
-        h('a', { href: view.data.signedUrl, target: '_blank', rel: 'noopener' }, 'PDFを開く'),
+        h('a', { href: view.data.signedUrl, target: '_blank', rel: 'noopener' }, '別タブで開く'),
         dl.data?.signedUrl && h('a', { href: dl.data.signedUrl }, 'ダウンロード'),
       ),
+      viewer.el,
     );
   }
 
@@ -52,6 +56,7 @@ export async function detailView({ params, go }) {
 
   return {
     title: s.title,
+    destroy: () => viewer?.destroy(),
     el: h('article', { class: 'page detail' },
       h('header', { class: 'detail__head' },
         h('h1', {}, s.title),
