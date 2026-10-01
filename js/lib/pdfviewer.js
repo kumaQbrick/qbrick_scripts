@@ -15,12 +15,14 @@ function loadPdfjs() {
 }
 
 // ページを画面幅に合わせてcanvasに描く
+// 全部いっぺんに描くとスマホが死んだので、見えそうになったページから順に描く
 export function pdfViewer(url) {
   const status = h('p', { class: 'pdf__status' }, '読み込み中…');
   const pages = h('div', { class: 'pdf__pages' });
   const el = h('div', { class: 'pdf' }, status, pages);
 
   let doc = null;
+  let observer = null;
   let destroyed = false;
 
   (async () => {
@@ -40,14 +42,30 @@ export function pdfViewer(url) {
 
           status.textContent = `${doc.numPages}ページ`;
 
+          const first = await doc.getPage(1);
+          const v = first.getViewport({ scale: 1 });
+          const ratio = `${v.width} / ${v.height}`;
+
+          // https://developer.mozilla.org/ja/docs/Web/API/Intersection_Observer_API
+          observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                observer.unobserve(entry.target);
+                renderPage(doc, Number(entry.target.dataset.page), entry.target);
+              }
+            }
+          }, { rootMargin: '800px 0px' });
+
           for (let n = 1; n <= doc.numPages; n++) {
             const page = h('div', {
               class: 'pdf__page',
+              dataset: { page: String(n) },
+              style: { aspectRatio: ratio },
               role: 'img',
               'aria-label': `${n}ページ目`,
             });
             pages.appendChild(page);
-            await renderPage(doc, n, page);
+            observer.observe(page);
           }
         } else {
           doc.destroy();
@@ -64,6 +82,7 @@ export function pdfViewer(url) {
     el,
     destroy() {
       destroyed = true;
+      observer?.disconnect();
       doc?.destroy();
     },
   };
