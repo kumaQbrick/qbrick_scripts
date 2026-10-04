@@ -1,7 +1,7 @@
 import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
-import { isLoggedIn } from '../lib/state.js';
-import { h, fmtDate, fmtSize, lengthText, errText, notice } from '../lib/ui.js';
+import { isLoggedIn, myId } from '../lib/state.js';
+import { h, icon, fmtDate, fmtSize, lengthText, errText, toast, notice } from '../lib/ui.js';
 import { pdfViewer } from '../lib/pdfviewer.js';
 
 export async function detailView({ params, go }) {
@@ -18,6 +18,8 @@ export async function detailView({ params, go }) {
       h('p', {}, h('a', { href: '#/' }, '一覧へ')),
     );
   }
+
+  const isOwner = !!s.owner_id && s.owner_id === myId();
 
   // PDFのバケットは非公開なので期限つきのURLを毎回発行する
   // 表示用とダウンロード用で2個いる（download付きのURLだと別タブで開いたときダウンロードになってしまう）
@@ -41,9 +43,52 @@ export async function detailView({ params, go }) {
     );
   }
 
+  const likeBox = h('div', { class: 'like' });
+  await renderLike();
+
+  // いいねボタン
+  async function renderLike() {
+    const label = [icon('heart'), ' いいね ', h('b', {}, s.like_count)];
+    if (isLoggedIn()) {
+      if (!isOwner) {
+        const { data: mine } = await sb.from('likes').select('script_id').eq('script_id', s.id).eq('user_id', myId()).maybeSingle();
+        const liked = !!mine;
+        const btn = h('button', {
+          type: 'button',
+          class: `like__btn${liked ? ' is-on' : ''}`,
+          'aria-pressed': String(liked),
+          onclick: async () => {
+            btn.disabled = true;   // 連打防止
+            let res;
+            if (liked) {
+              res = await sb.from('likes').delete().eq('script_id', s.id).eq('user_id', myId());
+            } else {
+              res = await sb.from('likes').insert({ script_id: s.id });
+            }
+            if (res.error) toast(errText(res.error), 'error');
+            // 数はDBのトリガーで数えてるので取り直す
+            const { data } = await sb.from('scripts').select('like_count').eq('id', s.id).single();
+            if (data) s.like_count = data.like_count;
+            await renderLike();
+          },
+        }, ...label);
+        likeBox.replaceChildren(btn);
+      } else {
+        // 自分の脚本 → 押せない
+        likeBox.replaceChildren(
+          h('span', { class: 'like__btn is-off' }, ...label),
+          isOwner && h('small', {}, '自分の脚本'),
+        );
+      }
+    } else {
+      likeBox.replaceChildren(h('a', { class: 'like__btn', href: '#/login' }, ...label));
+    }
+  }
+
   const perm = PERMISSIONS[s.usage_permission];
 
   const aside = h('aside', { class: 'detail__aside' },
+    likeBox,
     h('dl', { class: 'facts' },
       fact('ジャンル', s.genres.join('・')),
       fact('長さ', lengthText(s)),

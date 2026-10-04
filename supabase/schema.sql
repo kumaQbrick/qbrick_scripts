@@ -27,12 +27,22 @@ create table public.scripts (
   pdf_path         text not null unique,
   pdf_filename     text not null default 'script.pdf' check (char_length(pdf_filename) <= 200),
   pdf_size         integer check (pdf_size >= 0),
+  like_count       integer not null default 0,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
 
 create index scripts_created_at_idx on public.scripts (created_at desc);
 create index scripts_owner_idx      on public.scripts (owner_id);
+
+create table public.likes (
+  script_id  uuid not null references public.scripts (id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (script_id, user_id)
+);
+
+create index likes_user_idx on public.likes (user_id);
 
 -- トリガー
 
@@ -61,6 +71,24 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+create function public.update_script_counters()
+returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_script uuid := coalesce(new.script_id, old.script_id);
+begin
+  update public.scripts
+     set like_count = (select count(*) from public.likes l where l.script_id = v_script)
+   where id = v_script;
+  return null;
+end;
+$$;
+
+create trigger likes_counter
+  after insert or delete on public.likes
+  for each row execute function public.update_script_counters();
+
 -- 列単位の権限
 -- Supabase は新しいテーブルに全権限を付けるので、一度外して必要な分だけ付け直す。
 
@@ -72,10 +100,15 @@ grant insert (title, author_name, synopsis, genres, length_category, runtime_min
               status, usage_permission, visibility, pdf_path, pdf_filename, pdf_size)
   on public.scripts to authenticated;
 
+revoke insert, update, delete on public.likes from anon, authenticated;
+grant insert (script_id) on public.likes to authenticated;
+grant delete on public.likes to authenticated;
+
 -- RLS
 
 alter table public.profiles        enable row level security;
 alter table public.scripts         enable row level security;
+alter table public.likes           enable row level security;
 
 create policy "profiles: read all" on public.profiles
   for select using (true);
@@ -95,7 +128,25 @@ create policy "scripts: insert by member" on public.scripts
   for insert to authenticated
   with check (owner_id = (select auth.uid()));
 
+-- 誰が押したかは本人にしか見えない。数は scripts.like_count
+create policy "likes: read own" on public.likes
+  for select to authenticated
+  using (user_id = (select auth.uid()));
+create policy "likes: insert by member" on public.likes
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    -- 読める脚本だけ。自分の脚本は不可
+    and exists (select 1 from public.scripts s
+                 where s.id = likes.script_id
+                   and s.owner_id is distinct from (select auth.uid()))
+  );
+create policy "likes: delete own" on public.likes
+  for delete to authenticated
+  using (user_id = (select auth.uid()));
+
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
+revoke execute on function public.update_script_counters()   from public, anon, authenticated;
 
 -- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
 -- 非公開バケット。画面からは期限つきの署名URLで読む

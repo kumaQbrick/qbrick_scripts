@@ -35,6 +35,22 @@ function add(el, children) {
   }
 }
 
+// アイコン。24x24で線だけ
+const ICONS = {
+  heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+};
+export function icon(name) {
+  const NS = 'http://www.w3.org/2000/svg';   // createElementじゃなくてcreateElementNSじゃないと出ない
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', `icon icon--${name}`);
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+
 // 0埋め
 function pad(n) {
   return n < 10 ? '0' + n : '' + n;
