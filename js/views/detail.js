@@ -1,7 +1,7 @@
 import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
-import { isLoggedIn, myId } from '../lib/state.js';
-import { h, icon, fmtDate, fmtSize, lengthText, errText, toast, notice } from '../lib/ui.js';
+import { state, isLoggedIn, myId } from '../lib/state.js';
+import { h, icon, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
 import { pdfViewer } from '../lib/pdfviewer.js';
 
 export async function detailView({ params, go }) {
@@ -112,6 +112,7 @@ export async function detailView({ params, go }) {
         h('div', { class: 'detail__main' },
           s.synopsis && h('p', { class: 'synopsis' }, s.synopsis),
           reader,
+          await comments(s),
         ),
       ),
     ),
@@ -120,4 +121,99 @@ export async function detailView({ params, go }) {
 
 function fact(label, value) {
   return h('div', {}, h('dt', {}, label), h('dd', {}, value));
+}
+
+async function comments(s) {
+  const list = h('ol', { class: 'comments' });
+  const heading = h('h2', {}, 'コメント');
+  const section = h('section', { class: 'comments-section' }, heading, list);
+
+  async function load() {
+    const { data, error } = await sb
+      .from('comments')
+      .select('id, body, is_anonymous, author_id, created_at, author:profiles(display_name)')
+      .eq('script_id', s.id)
+      .order('created_at', { ascending: true });
+    if (error) { list.replaceChildren(h('li', {}, notice('error', errText(error)))); return; }
+
+    // 自分のコメントか、管理者なら匿名の中身
+    // RLSで本人と管理者の分しか返ってこないのでここでは何も考えなくていい
+    const authors = new Map();
+    if (isLoggedIn()) {
+      if (data.length) {
+        const { data: rows } = await sb
+          .from('comment_authors')
+          .select('comment_id, user_id, user:profiles(display_name)')
+          .in('comment_id', data.map((c) => c.id));
+        for (const r of rows ?? []) {
+          authors.set(r.comment_id, r);
+        }
+      }
+    }
+
+    heading.textContent = data.length ? `コメント ${data.length}` : 'コメント';
+    if (!data.length) {
+      list.replaceChildren(h('li', { class: 'muted' }, 'まだありません'));
+      return;
+    }
+    list.replaceChildren(...data.map((c) => {
+      const real = authors.get(c.id);
+      const mine = real?.user_id === myId();
+      return h('li', { class: 'comment' },
+        h('div', { class: 'comment__head' },
+          h('b', { class: c.is_anonymous ? 'muted' : null }, c.is_anonymous ? '匿名' : (c.author?.display_name ?? '退会した人')),
+          mine && h('span', { class: 'tag' }, '自分'),
+          h('time', { datetime: c.created_at }, fmtDateTime(c.created_at)),
+          mine && h('button', {
+            type: 'button', class: 'link-btn',
+            onclick: async () => {
+              if (!confirm('このコメントを消しますか？')) return
+              const { error: e } = await sb.from('comments').delete().eq('id', c.id)
+              if (e) toast(errText(e), 'error'); else load()
+            },
+          }, '削除'),
+        ),
+        h('p', {}, c.body),
+      );
+    }));
+  }
+
+  await load();
+
+  if (!isLoggedIn()) {
+    section.append(notice('info', 'コメントするには', h('a', { href: '#/login' }, 'ログイン')));
+  } else {
+    const body = h('textarea', { rows: 3, maxlength: 2000, required: true, 'aria-label': 'コメント' });
+    const send = h('button', { type: 'submit', class: 'btn btn--ink' }, '送信');
+    const form = h('form', {
+      class: 'comment-form',
+      onsubmit: async (e) => {
+        e.preventDefault();
+        const text = body.value.trim();
+        if (text) {
+          const anonymous = form.querySelector('input[name=as]:checked').value === 'anon';
+          await busy(send, '送信中…', async () => {
+            // 匿名のときはauthor_idを空にして、本当の投稿者はcomment_authorsに入る（DBの関数の中で）
+            const { error } = await sb.rpc('post_comment', { p_script_id: s.id, p_body: text, p_anonymous: anonymous });
+            if (error) {
+              toast(errText(error), 'error');
+            } else {
+              body.value = '';
+              await load();
+            }
+          });
+        }
+      },
+    },
+      body,
+      h('div', { class: 'comment-form__foot' },
+        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'name', checked: true }), state.profile?.display_name ?? '名前を出す'),
+        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'anon' }), '匿名'),
+        send,
+      ),
+      notice('info', '匿名でも、管理者には誰が書いたか分かります（荒らし対策）'),
+    );
+    section.append(form);
+  }
+  return section;
 }

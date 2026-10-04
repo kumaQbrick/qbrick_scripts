@@ -60,6 +60,11 @@ export function fmtDate(iso) {
   var d = new Date(iso);
   return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate());
 }
+export function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${fmtDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 export function fmtSize(bytes) {
     if (bytes == null) return '';
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;

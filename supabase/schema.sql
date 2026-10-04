@@ -28,6 +28,7 @@ create table public.scripts (
   pdf_filename     text not null default 'script.pdf' check (char_length(pdf_filename) <= 200),
   pdf_size         integer check (pdf_size >= 0),
   like_count       integer not null default 0,
+  comment_count    integer not null default 0,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -43,6 +44,25 @@ create table public.likes (
 );
 
 create index likes_user_idx on public.likes (user_id);
+
+create table public.comments (
+  id           uuid primary key default gen_random_uuid(),
+  script_id    uuid not null references public.scripts (id) on delete cascade,
+  -- 匿名なら null。本当の投稿者は comment_authors に入る
+  author_id    uuid references public.profiles (id) on delete set null,
+  is_anonymous boolean not null default false,
+  body         text not null check (char_length(btrim(body)) between 1 and 2000),
+  created_at   timestamptz not null default now()
+);
+
+create index comments_script_idx on public.comments (script_id, created_at);
+
+create table public.comment_authors (
+  comment_id uuid primary key references public.comments (id) on delete cascade,
+  user_id    uuid not null references public.profiles (id) on delete cascade
+);
+
+create index comment_authors_user_idx on public.comment_authors (user_id);
 
 -- トリガー
 
@@ -78,15 +98,25 @@ as $$
 declare
   v_script uuid := coalesce(new.script_id, old.script_id);
 begin
-  update public.scripts
-     set like_count = (select count(*) from public.likes l where l.script_id = v_script)
-   where id = v_script;
+  if tg_table_name = 'likes' then
+    update public.scripts
+       set like_count = (select count(*) from public.likes l where l.script_id = v_script)
+     where id = v_script;
+  else
+    update public.scripts
+       set comment_count = (select count(*) from public.comments c where c.script_id = v_script)
+     where id = v_script;
+  end if;
   return null;
 end;
 $$;
 
 create trigger likes_counter
   after insert or delete on public.likes
+  for each row execute function public.update_script_counters();
+
+create trigger comments_counter
+  after insert or delete on public.comments
   for each row execute function public.update_script_counters();
 
 -- 列単位の権限
@@ -104,11 +134,20 @@ revoke insert, update, delete on public.likes from anon, authenticated;
 grant insert (script_id) on public.likes to authenticated;
 grant delete on public.likes to authenticated;
 
+-- コメントは post_comment() 経由でしか書けない（匿名でも投稿者を記録するため）
+revoke insert, update, delete on public.comments from anon, authenticated;
+grant delete on public.comments to authenticated;
+
+revoke all on public.comment_authors from anon;
+revoke insert, update, delete on public.comment_authors from authenticated;
+
 -- RLS
 
 alter table public.profiles        enable row level security;
 alter table public.scripts         enable row level security;
 alter table public.likes           enable row level security;
+alter table public.comments        enable row level security;
+alter table public.comment_authors enable row level security;
 
 create policy "profiles: read all" on public.profiles
   for select using (true);
@@ -145,8 +184,54 @@ create policy "likes: delete own" on public.likes
   for delete to authenticated
   using (user_id = (select auth.uid()));
 
+create policy "comments: read" on public.comments
+  for select using (exists (select 1 from public.scripts s where s.id = comments.script_id));
+create policy "comments: delete own" on public.comments
+  for delete to authenticated
+  using (exists (select 1 from public.comment_authors ca
+                  where ca.comment_id = comments.id and ca.user_id = (select auth.uid())));
+
+-- 本人だけ
+create policy "comment_authors: read own" on public.comment_authors
+  for select to authenticated
+  using (user_id = (select auth.uid()));
+
+-- 画面から呼ぶ関数
+
+create function public.post_comment(p_script_id uuid, p_body text, p_anonymous boolean)
+returns uuid
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_body text := btrim(coalesce(p_body, ''));
+  v_anon boolean := coalesce(p_anonymous, false);
+  v_id   uuid;
+begin
+  if v_uid is null then
+    raise exception 'ログインしてください' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.scripts s where s.id = p_script_id) then
+    raise exception '脚本が見つかりません' using errcode = 'P0002';
+  end if;
+  if char_length(v_body) = 0 or char_length(v_body) > 2000 then
+    raise exception 'コメントは1〜2000文字で入力してください' using errcode = '22023';
+  end if;
+
+  insert into public.comments (script_id, author_id, is_anonymous, body)
+  values (p_script_id, case when v_anon then null else v_uid end, v_anon, v_body)
+  returning id into v_id;
+
+  insert into public.comment_authors (comment_id, user_id) values (v_id, v_uid);
+  return v_id;
+end;
+$$;
+
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
 revoke execute on function public.update_script_counters()   from public, anon, authenticated;
+-- 未ログインでは呼べないようにする
+revoke execute on function public.post_comment(uuid, text, boolean) from public, anon;
+grant execute on function public.post_comment(uuid, text, boolean) to authenticated;
 
 -- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
 -- 非公開バケット。画面からは期限つきの署名URLで読む
