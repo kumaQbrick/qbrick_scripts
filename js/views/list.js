@@ -1,5 +1,5 @@
 import { sb } from '../lib/supabase.js';
-import { isLoggedIn } from '../lib/state.js';
+import { isLoggedIn, isMember } from '../lib/state.js';
 import { h, icon, lengthText, notice } from '../lib/ui.js';
 
 // 一覧で使う列だけ（*にするとあらすじまで全部とってきて重い）
@@ -13,8 +13,11 @@ export async function listView() {
   if (error) throw error;
 
   let notMember = null;
-  if (!isLoggedIn()) {
-    notMember = notice('info', 'メンバー限定の脚本は、', h('a', { href: '#/login' }, 'ログイン'), 'すると読めます');
+  if (!isMember()) {
+    notMember = notice('info',
+      isLoggedIn()
+        ? ['メンバー限定の脚本は、', h('a', { href: '#/account' }, '招待コード'), 'を入れると読めます']
+        : ['メンバー限定の脚本は、', h('a', { href: '#/login' }, 'ログイン'), 'すると読めます']);
   }
 
   return h('section', { class: 'page' },

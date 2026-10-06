@@ -1,6 +1,6 @@
 import { sb, siteUrl } from '../lib/supabase.js';
-import { state, setUser, isLoggedIn } from '../lib/state.js';
-import { h, field, errText, notice, busy } from '../lib/ui.js';
+import { state, setUser, isLoggedIn, isMember } from '../lib/state.js';
+import { h, field, errText, toast, notice, busy } from '../lib/ui.js';
 
 const MIN_PASSWORD = 8;
 
@@ -50,6 +50,7 @@ export async function signupView({ go }) {
   const name = h('input', { type: 'text', maxlength: 30, autocomplete: 'nickname', required: true });
   const email = h('input', { type: 'email', autocomplete: 'email', required: true });
   const password = h('input', { type: 'password', autocomplete: 'new-password', minlength: MIN_PASSWORD, required: true });
+  const code = h('input', { type: 'text', autocomplete: 'off', required: true });
   const msg = h('div', { role: 'alert' });
   const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, '登録');
 
@@ -61,6 +62,7 @@ export async function signupView({ go }) {
       if (!name.value.trim()) problems.push('名前が空です');
       if (!email.value.trim()) problems.push('メールアドレスが空です');
       if (password.value.length < MIN_PASSWORD) problems.push(`パスワードは${MIN_PASSWORD}文字以上`);
+      if (!code.value.trim()) problems.push('招待コードが空です');
 
       if (problems.length == 0) {
         await busy(submit, '登録中…', async () => {
@@ -68,7 +70,8 @@ export async function signupView({ go }) {
             email: email.value.trim(),
             password: password.value,
             options: {
-              data: { display_name: name.value.trim() },
+              // 招待コードはDBのトリガー（handle_new_user）で照合してる
+              data: { display_name: name.value.trim(), invite_code: code.value.trim() },
               emailRedirectTo: siteUrl(),
             },
           });
@@ -76,7 +79,12 @@ export async function signupView({ go }) {
             if (data.session) {
               // Supabaseでメール確認をオフにしてるとここに来る
               await setUser(data.user);
-              go('/');
+              if (isMember()) {
+                go('/');
+              } else {
+                toast('招待コードが違ったので、まだメンバーになっていません', 'error');
+                go('/account');
+              }
             } else {
               // メール確認オンのとき
               form.replaceWith(h('div', {},
@@ -96,6 +104,7 @@ export async function signupView({ go }) {
     field('名前', name),
     field('メールアドレス', email),
     field('パスワード', password, { help: `${MIN_PASSWORD}文字以上` }),
+    field('招待コード', code),
     msg,
     h('div', { class: 'form-actions' }, submit),
   );

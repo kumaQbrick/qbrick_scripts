@@ -1,12 +1,47 @@
 import { sb } from '../lib/supabase.js';
-import { state, setUser, refreshProfile, isLoggedIn } from '../lib/state.js';
-import { h, field, errText, toast, busy, fmtDate } from '../lib/ui.js';
+import { state, setUser, refreshProfile, isLoggedIn, isMember, isAdmin } from '../lib/state.js';
+import { h, field, errText, toast, notice, busy, fmtDate } from '../lib/ui.js';
 
 export async function accountView({ go }) {
   if (!isLoggedIn()) {
     return h('section', { class: 'page narrow' }, h('h1', {}, 'アカウント'), h('p', {}, h('a', { class: 'btn btn--ink', href: '#/login' }, 'ログイン')));
   }
   const p = state.profile;
+
+  let membership;
+  if (isMember()) {
+    membership = h('section', { class: 'block' },
+      h('p', {}, isAdmin() ? '管理者です。' : 'メンバーです。'),
+    );
+  } else {
+    // まだメンバーじゃない人（登録のとき招待コード間違えた人とか）はここで入れ直せる
+    const code = h('input', { type: 'text', autocomplete: 'off' });
+    const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'メンバーになる');
+    const msg = h('div', { role: 'alert' });
+    membership = h('section', { class: 'block' },
+      h('h2', {}, '招待コード'),
+      h('p', {}, 'まだメンバーではありません。招待コードを入れると、投稿・いいね・コメントができます。'),
+      h('form', {
+        onsubmit: async (e) => {
+          e.preventDefault();
+          await busy(submit, '確認中…', async () => {
+            const { data, error } = await sb.rpc('redeem_invite', { p_code: code.value.trim() });
+            if (!error) {
+              if (data) {
+                await refreshProfile();
+                toast('メンバーになりました');
+                go('/');
+              } else {
+                msg.replaceChildren(notice('error', '招待コードが違います'));
+              }
+            } else {
+              msg.replaceChildren(notice('error', errText(error)));
+            }
+          });
+        },
+      }, field('招待コード', code), msg, h('div', { class: 'form-actions' }, submit)),
+    );
+  }
 
   // 名前の変更
   const name = h('input', { type: 'text', maxlength: 30, value: p?.display_name ?? '', required: true });
@@ -45,6 +80,7 @@ export async function accountView({ go }) {
   return h('section', { class: 'page narrow' },
     h('h1', {}, 'アカウント'),
     h('p', { class: 'muted' }, `${state.user.email}（${fmtDate(p?.created_at)} 登録）`),
+    membership,
     h('section', { class: 'block' }, nameForm),
     h('section', { class: 'block' },
       logout,

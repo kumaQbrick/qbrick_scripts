@@ -1,12 +1,13 @@
 import { GENRES, LENGTHS, STATUSES, PERMISSIONS, VISIBILITIES, MAX_PDF_MB } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
-import { state, isLoggedIn, myId } from '../lib/state.js';
+import { state, isLoggedIn, isMember, myId } from '../lib/state.js';
 import { h, field, radioGroup, errText, toast, notice, fmtSize } from '../lib/ui.js';
 
 const MAX_GENRES = 3; // 多すぎると一覧で読めないので
 
 export async function formView({ params, go }) {
   if (!isLoggedIn()) return gate('投稿にはログインが必要です。', h('a', { class: 'btn btn--ink', href: '#/login' }, 'ログイン'));
+  if (!isMember()) return gate('投稿はメンバーだけです。', h('a', { class: 'btn btn--ink', href: '#/account' }, '招待コードを入れる'));
 
   const v = {
     title: '', author_name: state.profile?.display_name ?? '', synopsis: '', genres: [],

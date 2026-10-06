@@ -2,9 +2,16 @@
 
 -- テーブル
 
+create table public.app_secrets (
+  key   text primary key,
+  value text not null
+);
+
 create table public.profiles (
   id           uuid primary key references auth.users (id) on delete cascade,
   display_name text not null check (char_length(btrim(display_name)) between 1 and 30),
+  is_member    boolean not null default false,
+  is_admin     boolean not null default false,
   created_at   timestamptz not null default now()
 );
 
@@ -64,24 +71,51 @@ create table public.comment_authors (
 
 create index comment_authors_user_idx on public.comment_authors (user_id);
 
+-- 判定用（RLS の中で使う）
+
+create function public.is_member()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce(
+    (select p.is_member or p.is_admin from public.profiles p where p.id = auth.uid()),
+    false
+  );
+$$;
+
+create function public.is_admin()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce(
+    (select p.is_admin from public.profiles p where p.id = auth.uid()),
+    false
+  );
+$$;
+
 -- トリガー
 
--- 登録時に profiles を作る
+-- 登録時に profiles を作る。招待コードが合っていればメンバー
 create function public.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 declare
   v_name   text := btrim(coalesce(new.raw_user_meta_data ->> 'display_name', ''));
+  v_code   text := btrim(coalesce(new.raw_user_meta_data ->> 'invite_code', ''));
+  v_secret text;
 begin
+  select s.value into v_secret from public.app_secrets s where s.key = 'invite_code';
+
   if v_name = '' then
     v_name := 'ユーザー';
   end if;
 
-  insert into public.profiles (id, display_name)
+  insert into public.profiles (id, display_name, is_member)
   values (
     new.id,
-    left(v_name, 30)
+    left(v_name, 30),
+    v_secret is not null and v_code <> '' and v_code = v_secret
   );
   return new;
 end;
@@ -122,6 +156,8 @@ create trigger comments_counter
 -- 列単位の権限
 -- Supabase は新しいテーブルに全権限を付けるので、一度外して必要な分だけ付け直す。
 
+revoke all on public.app_secrets from anon, authenticated;
+
 revoke insert, update, delete on public.profiles from anon, authenticated;
 grant update (display_name) on public.profiles to authenticated;
 
@@ -143,6 +179,7 @@ revoke insert, update, delete on public.comment_authors from authenticated;
 
 -- RLS
 
+alter table public.app_secrets     enable row level security;  -- ポリシーなし = 誰も読めない
 alter table public.profiles        enable row level security;
 alter table public.scripts         enable row level security;
 alter table public.likes           enable row level security;
@@ -156,16 +193,16 @@ create policy "profiles: update self" on public.profiles
   using (id = (select auth.uid()))
   with check (id = (select auth.uid()));
 
--- メンバー限定はログインした人だけ
+-- メンバー限定はメンバーと本人だけ
 create policy "scripts: read" on public.scripts
   for select using (
     visibility = 'public'
-    or (select auth.uid()) is not null
+    or (select public.is_member())
     or owner_id = (select auth.uid())
   );
 create policy "scripts: insert by member" on public.scripts
   for insert to authenticated
-  with check (owner_id = (select auth.uid()));
+  with check ((select public.is_member()) and owner_id = (select auth.uid()));
 
 -- 誰が押したかは本人にしか見えない。数は scripts.like_count
 create policy "likes: read own" on public.likes
@@ -175,6 +212,7 @@ create policy "likes: insert by member" on public.likes
   for insert to authenticated
   with check (
     user_id = (select auth.uid())
+    and (select public.is_member())
     -- 読める脚本だけ。自分の脚本は不可
     and exists (select 1 from public.scripts s
                  where s.id = likes.script_id
@@ -186,15 +224,18 @@ create policy "likes: delete own" on public.likes
 
 create policy "comments: read" on public.comments
   for select using (exists (select 1 from public.scripts s where s.id = comments.script_id));
-create policy "comments: delete own" on public.comments
+create policy "comments: delete own or admin" on public.comments
   for delete to authenticated
-  using (exists (select 1 from public.comment_authors ca
-                  where ca.comment_id = comments.id and ca.user_id = (select auth.uid())));
+  using (
+    (select public.is_admin())
+    or exists (select 1 from public.comment_authors ca
+                where ca.comment_id = comments.id and ca.user_id = (select auth.uid()))
+  );
 
--- 本人だけ
-create policy "comment_authors: read own" on public.comment_authors
+-- 本人と管理者だけ
+create policy "comment_authors: read own or admin" on public.comment_authors
   for select to authenticated
-  using (user_id = (select auth.uid()));
+  using (user_id = (select auth.uid()) or (select public.is_admin()));
 
 -- 画面から呼ぶ関数
 
@@ -208,8 +249,8 @@ declare
   v_anon boolean := coalesce(p_anonymous, false);
   v_id   uuid;
 begin
-  if v_uid is null then
-    raise exception 'ログインしてください' using errcode = '42501';
+  if v_uid is null or not public.is_member() then
+    raise exception 'コメントできるのはメンバーだけです' using errcode = '42501';
   end if;
   if not exists (select 1 from public.scripts s where s.id = p_script_id) then
     raise exception '脚本が見つかりません' using errcode = 'P0002';
@@ -227,11 +268,33 @@ begin
 end;
 $$;
 
+create function public.redeem_invite(p_code text)
+returns boolean
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_secret text;
+begin
+  if v_uid is null then
+    raise exception 'ログインしてください' using errcode = '42501';
+  end if;
+  select s.value into v_secret from public.app_secrets s where s.key = 'invite_code';
+  if v_secret is null or btrim(coalesce(p_code, '')) <> v_secret then
+    return false;
+  end if;
+  update public.profiles set is_member = true where id = v_uid;
+  return true;
+end;
+$$;
+
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
 revoke execute on function public.update_script_counters()   from public, anon, authenticated;
 -- 未ログインでは呼べないようにする
 revoke execute on function public.post_comment(uuid, text, boolean) from public, anon;
+revoke execute on function public.redeem_invite(text)               from public, anon;
 grant execute on function public.post_comment(uuid, text, boolean) to authenticated;
+grant execute on function public.redeem_invite(text)               to authenticated;
 
 -- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
 -- 非公開バケット。画面からは期限つきの署名URLで読む
@@ -244,6 +307,7 @@ create policy "script pdf: upload own folder" on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'scripts'
+    and (select public.is_member())
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
@@ -263,5 +327,6 @@ create policy "script pdf: delete own or admin" on storage.objects
     bucket_id = 'scripts'
     and (
       (storage.foldername(name))[1] = (select auth.uid())::text
+      or (select public.is_admin())
     )
   );

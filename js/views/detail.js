@@ -1,6 +1,6 @@
 import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
-import { state, isLoggedIn, myId } from '../lib/state.js';
+import { state, isLoggedIn, isMember, isAdmin, myId } from '../lib/state.js';
 import { h, icon, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
 import { pdfViewer } from '../lib/pdfviewer.js';
 
@@ -50,7 +50,7 @@ export async function detailView({ params, go }) {
   async function renderLike() {
     const label = [icon('heart'), ' いいね ', h('b', {}, s.like_count)];
     if (isLoggedIn()) {
-      if (!isOwner) {
+      if (isMember() && !isOwner) {
         const { data: mine } = await sb.from('likes').select('script_id').eq('script_id', s.id).eq('user_id', myId()).maybeSingle();
         const liked = !!mine;
         const btn = h('button', {
@@ -74,7 +74,7 @@ export async function detailView({ params, go }) {
         }, ...label);
         likeBox.replaceChildren(btn);
       } else {
-        // 自分の脚本 → 押せない
+        // メンバーじゃない or 自分の脚本 → 押せない
         likeBox.replaceChildren(
           h('span', { class: 'like__btn is-off' }, ...label),
           isOwner && h('small', {}, '自分の脚本'),
@@ -163,8 +163,9 @@ async function comments(s) {
         h('div', { class: 'comment__head' },
           h('b', { class: c.is_anonymous ? 'muted' : null }, c.is_anonymous ? '匿名' : (c.author?.display_name ?? '退会した人')),
           mine && h('span', { class: 'tag' }, '自分'),
+          isAdmin() && c.is_anonymous && real && !mine && h('span', { class: 'tag tag--admin' }, real.user?.display_name ?? '?'),
           h('time', { datetime: c.created_at }, fmtDateTime(c.created_at)),
-          mine && h('button', {
+          (mine || isAdmin()) && h('button', {
             type: 'button', class: 'link-btn',
             onclick: async () => {
               if (!confirm('このコメントを消しますか？')) return
@@ -182,6 +183,8 @@ async function comments(s) {
 
   if (!isLoggedIn()) {
     section.append(notice('info', 'コメントするには', h('a', { href: '#/login' }, 'ログイン')));
+  } else if (!isMember()) {
+    section.append(notice('info', 'コメントはメンバーだけ。', h('a', { href: '#/account' }, '招待コードを入れる')));
   } else {
     const body = h('textarea', { rows: 3, maxlength: 2000, required: true, 'aria-label': 'コメント' });
     const send = h('button', { type: 'submit', class: 'btn btn--ink' }, '送信');

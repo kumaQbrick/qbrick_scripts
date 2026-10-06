@@ -1,5 +1,5 @@
 import { sb, isConfigured } from './lib/supabase.js';
-import { state, setUser, onStateChange } from './lib/state.js';
+import { state, setUser, onStateChange, isMember } from './lib/state.js';
 import { h, notice } from './lib/ui.js'
 
 import { listView } from './views/list.js';
@@ -84,7 +84,7 @@ function mount(el, title) {
 function renderNav() {
   var links = [
     h('a', { href: '#/' }, '一覧'),
-    state.user && h('a', { href: '#/new', class: 'nav-post' }, '投稿する'),
+    isMember() && h('a', { href: '#/new', class: 'nav-post' }, '投稿する'),
     state.user ? h('a', { href: '#/account', class: 'nav-me' }, state.profile?.display_name ?? 'アカウント')
                : h('a', { href: '#/login' }, 'ログイン'),
   ];
