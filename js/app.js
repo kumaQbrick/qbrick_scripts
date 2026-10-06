@@ -97,16 +97,21 @@ async function init() {
     return;
   }
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    const changed = (session?.user?.id ?? null) !== (state.user?.id ?? null);
-    if (changed || event === 'USER_UPDATED') {
-      await setUser(session?.user ?? null);
-    }
-    if (changed) {
-      if (ready) {
-        render();
+  sb.auth.onAuthStateChange((event, session) => {
+    // ここでsupabaseの処理をawaitすると固まる！！（半日つぶれた）
+    // setTimeoutで外に出すと直る
+    // https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+    setTimeout(async () => {
+      const changed = (session?.user?.id ?? null) !== (state.user?.id ?? null);
+      if (changed || event === 'USER_UPDATED') {
+        await setUser(session?.user ?? null);
       }
-    }
+      if (changed) {
+        if (ready) {
+          render();
+        }
+      }
+    }, 0);
   });
 
   const { data } = await sb.auth.getSession();
