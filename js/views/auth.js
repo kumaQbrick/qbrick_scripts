@@ -37,7 +37,7 @@ export async function loginView({ go }) {
       field('メールアドレス', email),
       field('パスワード', password),
       msg,
-      h('div', { class: 'form-actions' }, submit),
+      h('div', { class: 'form-actions' }, submit, h('a', { href: '#/reset' }, 'パスワードを忘れた')),
     ),
     h('p', { class: 'auth__alt' }, 'アカウントがない人は ', h('a', { href: '#/signup' }, '登録')),
   );
@@ -110,4 +110,63 @@ export async function signupView({ go }) {
   );
 
   return page('登録', form, h('p', { class: 'auth__alt' }, 'アカウントがある人は ', h('a', { href: '#/login' }, 'ログイン')));
+}
+
+/* ===== パスワード忘れた ===== */
+export async function resetView() {
+    const email = h('input', { type: 'email', autocomplete: 'email', required: true });
+    const msg = h('div', { role: 'alert' });
+    const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'メールを送る');
+    const form = h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        await busy(submit, '送信中…', async () => {
+          const { error } = await sb.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: siteUrl() });
+          if (error) return showErrors(msg, [errText(error)]);
+          // 登録されてないアドレスでも同じ表示にする（登録してるかどうか分からないように）
+          form.replaceWith(h('p', {}, '登録済みのアドレスなら、再設定のメールが届きます。'));
+        });
+      },
+    },
+      field('登録したメールアドレス', email),
+      msg,
+      h('div', { class: 'form-actions' }, submit),
+    );
+    return page('パスワード再設定', form);
+}
+
+// メールのリンクから来たとき
+export async function newPasswordView({ go }) {
+  if (!isLoggedIn()) {
+    return page('新しいパスワード',
+      h('p', {}, 'リンクの期限が切れているか、もう使われています。'),
+      h('p', {}, h('a', { href: '#/reset' }, 'もう一度メールを送る')));
+  }
+  const password = h('input', { type: 'password', autocomplete: 'new-password', minlength: MIN_PASSWORD, required: true });
+  const msg = h('div', { role: 'alert' });
+  const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, '変更');
+  return page('新しいパスワード',
+    h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        if (password.value.length >= MIN_PASSWORD) {
+          await busy(submit, '変更中…', async () => {
+            const { error } = await sb.auth.updateUser({ password: password.value });
+            if (error) {
+              showErrors(msg, [errText(error)]);
+            } else {
+              toast('パスワードを変えました');
+              go('/');
+            }
+          });
+        } else {
+          showErrors(msg, [`${MIN_PASSWORD}文字以上にしてください`]);
+        }
+      },
+    },
+      field('新しいパスワード', password, { help: `${MIN_PASSWORD}文字以上` }),
+      msg,
+      h('div', { class: 'form-actions' }, submit),
+    ),
+  );
 }

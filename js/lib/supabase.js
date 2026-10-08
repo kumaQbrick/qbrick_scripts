@@ -5,7 +5,9 @@ export const isConfigured =
 
 export const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    flowType: 'pkce',
+    // pkceだと、メールのリンクを別のブラウザ（スマホのメールアプリの中とか）で開いたときにログインできない
+    // flowType: 'pkce',
+    flowType: 'implicit',
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true

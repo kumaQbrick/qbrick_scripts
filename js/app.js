@@ -1,11 +1,11 @@
 import { sb, isConfigured } from './lib/supabase.js';
 import { state, setUser, onStateChange, isMember } from './lib/state.js';
-import { h, notice } from './lib/ui.js'
+import { h, toast, notice } from './lib/ui.js'
 
 import { listView } from './views/list.js';
 import { detailView } from './views/detail.js';
 import { formView } from './views/form.js';
-import { loginView, signupView } from './views/auth.js';
+import { loginView, signupView, resetView, newPasswordView } from './views/auth.js';
 import { accountView } from './views/account.js';
 //import { testView } from './views/test.js';
 
@@ -19,6 +19,8 @@ const routes = [
   [/^\/new$/, formView, '投稿'],
   [/^\/login$/,  loginView, 'ログイン'],
   [/^\/signup$/, signupView, '登録'],
+  [/^\/reset$/, resetView, 'パスワード再設定'],
+  [/^\/new-password$/, newPasswordView, '新しいパスワード'],
   [/^\/account$/, accountView, 'アカウント'],
   //[/^\/test$/, testView, 'てすと'],
 ];
@@ -27,6 +29,7 @@ const main = document.getElementById('main');
 let renderToken = 0;
 let destroyCurrent = null;
 let ready = false;
+let recoveryPending = false
 
 export function go(path) {
     if (location.hash === `#${path}`) render();
@@ -97,6 +100,13 @@ async function init() {
     return;
   }
 
+  // メールのリンクが期限切れとか
+  const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+  if (hashParams.has('error_description')) {
+    toast(`リンクが使えませんでした（${hashParams.get('error_description')}）`, 'error');
+    history.replaceState(null, '', location.pathname + '#/');
+  }
+
   sb.auth.onAuthStateChange((event, session) => {
     // ここでsupabaseの処理をawaitすると固まる！！（半日つぶれた）
     // setTimeoutで外に出すと直る
@@ -106,9 +116,17 @@ async function init() {
       if (changed || event === 'USER_UPDATED') {
         await setUser(session?.user ?? null);
       }
-      if (changed) {
+      if (event === 'PASSWORD_RECOVERY') {
         if (ready) {
-          render();
+          go('/new-password');
+        } else {
+          recoveryPending = true;
+        }
+      } else {
+        if (changed) {
+          if (ready) {
+            render();
+          }
         }
       }
     }, 0);
@@ -116,6 +134,13 @@ async function init() {
 
   const { data } = await sb.auth.getSession();
   await setUser(data.session?.user ?? null);
+
+  // メールのリンクで付いてきたトークンをURLから消す
+  if (/access_token=|refresh_token=|type=recovery/.test(location.hash)) {
+    if (/type=recovery/.test(location.hash)) recoveryPending = true;
+    history.replaceState(null, '', location.pathname + '#/');
+  }
+  if (recoveryPending) history.replaceState(null, '', location.pathname + '#/new-password');
 
   onStateChange(renderNav);
   renderNav();

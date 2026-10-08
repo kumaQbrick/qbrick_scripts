@@ -66,6 +66,22 @@ export async function accountView({ go }) {
     },
   }, field('名前', name), h('div', { class: 'form-actions' }, nameBtn));
 
+  // パスワードの変更
+  const pw = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8 });
+  const pwBtn = h('button', { type: 'submit', class: 'btn' }, '変更');
+  const pwForm = h('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      if (pw.value.length < 8) return toast('パスワードは8文字以上', 'error');
+      await busy(pwBtn, '変更中…', async () => {
+        const { error } = await sb.auth.updateUser({ password: pw.value });
+        if (error) return toast(errText(error), 'error');
+        pw.value = '';
+        toast('パスワードを変えました');
+      });
+    },
+  }, field('新しいパスワード', pw, { help: '8文字以上' }), h('div', { class: 'form-actions' }, pwBtn));
+
   const logout = h('button', {
     type: 'button', class: 'btn',
     onclick: async (e) => {
@@ -82,6 +98,7 @@ export async function accountView({ go }) {
     h('p', { class: 'muted' }, `${state.user.email}（${fmtDate(p?.created_at)} 登録）`),
     membership,
     h('section', { class: 'block' }, nameForm),
+    h('section', { class: 'block' }, pwForm),
     h('section', { class: 'block' },
       logout,
       h('p', { class: 'muted' }, '退会したいときは管理者へ。退会しても投稿した脚本は残るので、消したいものは先に消してください。')),
