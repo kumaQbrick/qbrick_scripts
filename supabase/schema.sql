@@ -288,13 +288,106 @@ begin
 end;
 $$;
 
+create function public.admin_list_users()
+returns table (
+  id uuid, display_name text, email text,
+  is_member boolean, is_admin boolean, created_at timestamptz
+)
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception '管理者だけが使えます' using errcode = '42501';
+  end if;
+  return query
+    select p.id, p.display_name, u.email::text, p.is_member, p.is_admin, p.created_at
+      from public.profiles p
+      join auth.users u on u.id = p.id
+     order by p.created_at;
+end;
+$$;
+
+create function public.admin_set_member(p_user_id uuid, p_value boolean)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception '管理者だけが使えます' using errcode = '42501';
+  end if;
+  update public.profiles set is_member = coalesce(p_value, false) where id = p_user_id;
+end;
+$$;
+
+-- 管理者を0人にはできない
+create function public.admin_set_admin(p_user_id uuid, p_value boolean)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception '管理者だけが使えます' using errcode = '42501';
+  end if;
+  if not coalesce(p_value, false)
+     and (select count(*) from public.profiles where is_admin) <= 1
+     and exists (select 1 from public.profiles where id = p_user_id and is_admin) then
+    raise exception '管理者が0人になるため外せません。先に別の人を管理者にしてください'
+      using errcode = '22023';
+  end if;
+  update public.profiles
+     set is_admin  = coalesce(p_value, false),
+         is_member = is_member or coalesce(p_value, false)
+   where id = p_user_id;
+end;
+$$;
+
+create function public.admin_get_invite_code()
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception '管理者だけが使えます' using errcode = '42501';
+  end if;
+  return (select s.value from public.app_secrets s where s.key = 'invite_code');
+end;
+$$;
+
+create function public.admin_set_invite_code(p_code text)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_code text := btrim(coalesce(p_code, ''));
+begin
+  if not public.is_admin() then
+    raise exception '管理者だけが使えます' using errcode = '42501';
+  end if;
+  if char_length(v_code) < 8 then
+    raise exception '招待コードは8文字以上にしてください' using errcode = '22023';
+  end if;
+  insert into public.app_secrets (key, value) values ('invite_code', v_code)
+  on conflict (key) do update set value = excluded.value;
+end;
+$$;
+
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
 revoke execute on function public.update_script_counters()   from public, anon, authenticated;
 -- 未ログインでは呼べないようにする
 revoke execute on function public.post_comment(uuid, text, boolean) from public, anon;
 revoke execute on function public.redeem_invite(text)               from public, anon;
+revoke execute on function public.admin_list_users()                from public, anon;
+revoke execute on function public.admin_set_member(uuid, boolean)   from public, anon;
+revoke execute on function public.admin_set_admin(uuid, boolean)    from public, anon;
+revoke execute on function public.admin_get_invite_code()           from public, anon;
+revoke execute on function public.admin_set_invite_code(text)       from public, anon;
 grant execute on function public.post_comment(uuid, text, boolean) to authenticated;
 grant execute on function public.redeem_invite(text)               to authenticated;
+grant execute on function public.admin_list_users()                to authenticated;
+grant execute on function public.admin_set_member(uuid, boolean)   to authenticated;
+grant execute on function public.admin_set_admin(uuid, boolean)    to authenticated;
+grant execute on function public.admin_get_invite_code()           to authenticated;
+grant execute on function public.admin_set_invite_code(text)       to authenticated;
 
 -- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
 -- 非公開バケット。画面からは期限つきの署名URLで読む

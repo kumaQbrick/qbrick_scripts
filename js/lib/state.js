@@ -24,6 +24,6 @@ export async function refreshProfile() {
 }
 
 export const isLoggedIn = () => !!state.user;
-export const isMember = () => !!state.profile?.is_member;
+export const isMember = () => !!(state.profile?.is_member || state.profile?.is_admin); // 管理者はメンバー扱い
 export const isAdmin = () => !!state.profile?.is_admin;
 export const myId = () => state.user?.id ?? null;

@@ -15,3 +15,4 @@
    ```
 3. `js/config.js` に Project URL と publishable key を書く
 4. `python3 -m http.server 8000` で http://localhost:8000/ を開く
+5. 自分を管理者にする: `update public.profiles set is_admin = true where display_name = '自分の名前';`

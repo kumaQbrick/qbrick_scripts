@@ -1,5 +1,5 @@
 import { sb, isConfigured } from './lib/supabase.js';
-import { state, setUser, onStateChange, isMember } from './lib/state.js';
+import { state, setUser, onStateChange, isMember, isAdmin } from './lib/state.js';
 import { h, toast, notice } from './lib/ui.js'
 
 import { listView } from './views/list.js';
@@ -7,6 +7,7 @@ import { detailView } from './views/detail.js';
 import { formView } from './views/form.js';
 import { loginView, signupView, resetView, newPasswordView } from './views/auth.js';
 import { accountView } from './views/account.js';
+import { adminView } from './views/admin.js';
 //import { testView } from './views/test.js';
 
 const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
@@ -22,6 +23,7 @@ const routes = [
   [/^\/reset$/, resetView, 'パスワード再設定'],
   [/^\/new-password$/, newPasswordView, '新しいパスワード'],
   [/^\/account$/, accountView, 'アカウント'],
+  [/^\/admin$/,   adminView, '管理'],
   //[/^\/test$/, testView, 'てすと'],
 ];
 
@@ -88,6 +90,7 @@ function renderNav() {
   var links = [
     h('a', { href: '#/' }, '一覧'),
     isMember() && h('a', { href: '#/new', class: 'nav-post' }, '投稿する'),
+    isAdmin() && h('a', { href: '#/admin' }, '管理'),
     state.user ? h('a', { href: '#/account', class: 'nav-me' }, state.profile?.display_name ?? 'アカウント')
                : h('a', { href: '#/login' }, 'ログイン'),
   ];
