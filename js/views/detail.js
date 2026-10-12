@@ -20,6 +20,8 @@ export async function detailView({ params, go }) {
   }
 
   const isOwner = !!s.owner_id && s.owner_id === myId();
+  const canEdit = (isOwner && isMember()) || isAdmin();
+  const canDelete = isOwner || isAdmin();
 
   // PDFのバケットは非公開なので期限つきのURLを毎回発行する
   // 表示用とダウンロード用で2個いる（download付きのURLだと別タブで開いたときダウンロードになってしまう）
@@ -85,7 +87,25 @@ export async function detailView({ params, go }) {
     }
   }
 
+  async function onDelete(e) {
+      if (confirm(`「${s.title}」を消します。PDFも消えて、元に戻せません。`)) {
+          await busy(e.currentTarget, '削除中…', async () => {
+              const { error: delErr } = await sb.from('scripts').delete().eq('id', s.id);
+              if (!delErr) {
+                  // 先にDBを消してからPDF（逆だとPDFだけ消えて脚本が残ることがある）
+                  const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
+                  if (rmErr) console.warn(rmErr);
+                  toast('消しました');
+                  go('/');
+              } else {
+                  toast(errText(delErr), 'error');
+              }
+          });
+      }
+  }
+
   const perm = PERMISSIONS[s.usage_permission];
+  const updated = fmtDate(s.updated_at) !== fmtDate(s.created_at) ? fmtDate(s.updated_at) : null;
 
   const aside = h('aside', { class: 'detail__aside' },
     likeBox,
@@ -95,7 +115,11 @@ export async function detailView({ params, go }) {
       fact('状態', STATUSES[s.status]?.label ?? s.status),
       fact('使っていい？', perm?.label ?? s.usage_permission),
       fact('公開', VISIBILITIES[s.visibility]?.label ?? s.visibility),
-      fact('投稿', fmtDate(s.created_at)),
+      fact('投稿', fmtDate(s.created_at) + (updated ? `（更新 ${updated}）` : '')),
+    ),
+    (canEdit || canDelete) && h('div', { class: 'detail__owner' },
+      canEdit && h('a', { class: 'btn', href: `#/edit/${s.id}` }, '編集'),
+      canDelete && h('button', { type: 'button', class: 'btn btn--danger', onclick: onDelete }, '削除'),
     ),
   );
 

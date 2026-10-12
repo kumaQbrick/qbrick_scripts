@@ -36,6 +36,7 @@ a { color: var(--accent); }
 .btn { display: inline-block; padding: 6px 16px; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #222; font: inherit; text-decoration: none; cursor: pointer; }
 .btn:disabled { opacity: .5; }
 .btn--ink { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn--danger { color: var(--red); border-color: var(--red); }
 
 input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], select, textarea {
   width: 100%;
@@ -80,6 +81,7 @@ input[type=text], input[type=email], input[type=password], input[type=number], i
 .facts > div { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .facts dt { width: 6em; flex: none; color: var(--gray); }
 .facts dd { margin: 0; }
+.detail__owner { display: flex; gap: 8px; margin-top: 12px; }
 .synopsis { white-space: pre-wrap; }
 .reader { background: #fff; border: 1px solid var(--line); border-radius: 6px; }
 .reader__bar { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }

@@ -18,6 +18,7 @@ const routes = [
   [/^\/$/, listView, '一覧'],
   [new RegExp(`^/s/${UUID}$`), detailView, '脚本'],
   [/^\/new$/, formView, '投稿'],
+  [new RegExp(`^/edit/${UUID}$`), formView, '編集'],
   [/^\/login$/,  loginView, 'ログイン'],
   [/^\/signup$/, signupView, '登録'],
   [/^\/reset$/, resetView, 'パスワード再設定'],

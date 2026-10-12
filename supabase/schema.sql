@@ -125,6 +125,25 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- いいね・コメント数の変化では updated_at を動かさない
+create function public.touch_script_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (to_jsonb(new) - 'like_count' - 'comment_count' - 'updated_at')
+     is distinct from
+     (to_jsonb(old) - 'like_count' - 'comment_count' - 'updated_at') then
+    new.updated_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+create trigger scripts_touch_updated_at
+  before update on public.scripts
+  for each row execute function public.touch_script_updated_at();
+
 create function public.update_script_counters()
 returns trigger
 language plpgsql security definer set search_path = ''
@@ -165,6 +184,10 @@ revoke insert, update, delete on public.scripts from anon, authenticated;
 grant insert (title, author_name, synopsis, genres, length_category, runtime_minutes,
               status, usage_permission, visibility, pdf_path, pdf_filename, pdf_size)
   on public.scripts to authenticated;
+grant update (title, author_name, synopsis, genres, length_category, runtime_minutes,
+              status, usage_permission, visibility, pdf_path, pdf_filename, pdf_size)
+  on public.scripts to authenticated;
+grant delete on public.scripts to authenticated;
 
 revoke insert, update, delete on public.likes from anon, authenticated;
 grant insert (script_id) on public.likes to authenticated;
@@ -203,6 +226,19 @@ create policy "scripts: read" on public.scripts
 create policy "scripts: insert by member" on public.scripts
   for insert to authenticated
   with check ((select public.is_member()) and owner_id = (select auth.uid()));
+create policy "scripts: update by owner or admin" on public.scripts
+  for update to authenticated
+  using (
+    (owner_id = (select auth.uid()) and (select public.is_member()))
+    or (select public.is_admin())
+  )
+  with check (
+    (owner_id = (select auth.uid()) and (select public.is_member()))
+    or (select public.is_admin())
+  );
+create policy "scripts: delete by owner or admin" on public.scripts
+  for delete to authenticated
+  using (owner_id = (select auth.uid()) or (select public.is_admin()));
 
 -- 誰が押したかは本人にしか見えない。数は scripts.like_count
 create policy "likes: read own" on public.likes
@@ -372,6 +408,7 @@ end;
 $$;
 
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
+revoke execute on function public.touch_script_updated_at()  from public, anon, authenticated;
 revoke execute on function public.update_script_counters()   from public, anon, authenticated;
 -- 未ログインでは呼べないようにする
 revoke execute on function public.post_comment(uuid, text, boolean) from public, anon;
