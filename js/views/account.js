@@ -12,6 +12,7 @@ export async function accountView({ go }) {
   if (isMember()) {
     membership = h('section', { class: 'block' },
       h('p', {}, isAdmin() ? '管理者です。' : 'メンバーです。'),
+      h('p', { class: 'links' }, h('a', { href: '#/?mine=1' }, '自分の投稿'), h('a', { href: '#/?liked=1' }, 'いいねした脚本')),
     );
   } else {
     // まだメンバーじゃない人（登録のとき招待コード間違えた人とか）はここで入れ直せる

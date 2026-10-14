@@ -38,6 +38,8 @@ function add(el, children) {
 // アイコン。24x24で線だけ
 const ICONS = {
   heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  comment: 'M5 5h14v10H9l-4 4z',
+  lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z',
 };
 export function icon(name) {
   const NS = 'http://www.w3.org/2000/svg';   // createElementじゃなくてcreateElementNSじゃないと出ない

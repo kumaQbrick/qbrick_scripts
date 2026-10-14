@@ -42,6 +42,7 @@ create table public.scripts (
 
 create index scripts_created_at_idx on public.scripts (created_at desc);
 create index scripts_owner_idx      on public.scripts (owner_id);
+create index scripts_genres_idx     on public.scripts using gin (genres);
 
 create table public.likes (
   script_id  uuid not null references public.scripts (id) on delete cascade,
