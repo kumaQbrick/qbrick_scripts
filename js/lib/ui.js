@@ -96,6 +96,13 @@ export function errText(err) {
     [/Email not confirmed/i, 'メールの確認がまだです。届いたメールのリンクを開いてください'],
     [/User already registered/i, 'このメールアドレスはもう登録されています'],
     [/Password should be at least/i, 'パスワードが短すぎます'],
+    [/rate limit|too many requests/i, '操作が多すぎます。少し待ってからもう一度'],
+    [/Failed to fetch|NetworkError|Load failed/i, '通信できませんでした'], // Load failedはiPhone
+    [/duplicate key/i, 'もう登録されています'],
+    [/row-level security|permission denied/i, '権限がありません。ログインし直すと直るかも'],
+    [/exceeded the maximum allowed size|Payload too large/i, 'ファイルが大きすぎます'],
+    [/mime type/i, 'PDF以外はアップロードできません'],
+    [/JWT expired/i, 'ログインが切れました。もう一度ログインしてください'],
   ];
   for (const [re, text] of table) {
     if (re.test(msg)) {

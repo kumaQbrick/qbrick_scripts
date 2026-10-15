@@ -8,7 +8,7 @@ export async function detailView({ params, go }) {
   const [id] = params;
   const { data: s, error } = await sb.from('scripts').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  console.log(s);
+  //console.log(s);
 
   if (!s) {
     return h('section', { class: 'page narrow' },

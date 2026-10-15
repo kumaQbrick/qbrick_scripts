@@ -104,7 +104,6 @@ export async function formView({ params, go }) {
       visibility: form.querySelector('input[name=visibility]:checked')?.value,
     };
     const file = pdf.files[0] ?? null;
-    console.log(values, file);
 
     // チェック
     const problems = [];
