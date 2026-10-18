@@ -99,6 +99,11 @@ function renderNav() {
 }
 
 async function init() {
+  document.querySelector('[data-skip]').addEventListener('click', function (e) {
+    e.preventDefault();
+    main.focus();
+  });
+
   if (!isConfigured) {
     main.replaceChildren(simplePage('セットアップがまだです', h('p', {}, 'js/config.js に Supabase の URL と publishable key を書いてください。')));
     return;

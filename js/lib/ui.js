@@ -1,4 +1,4 @@
-import { LENGTHS } from '../config.js';
+import { LENGTHS, STATUSES } from '../config.js';
 
 // 要素を作るやつ
 // h('a', { href: '#/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
@@ -76,6 +76,17 @@ export function fmtSize(bytes) {
 export function lengthText(s) {
   const len = LENGTHS[s.length_category]?.label ?? '';
   return s.runtime_minutes ? `${len} ${s.runtime_minutes}分` : len;
+}
+
+// ホチキス留めの台本の表紙。縦書き・右綴じ
+export function cover(s, { large = false } = {}) {
+  const st = STATUSES[s.status];
+  return h('div', { class: `cover${large ? ' cover--large' : ''}`, 'aria-hidden': 'true' },
+    h('span', { class: 'cover__len' }, LENGTHS[s.length_category]?.label ?? ''),
+    h('span', { class: 'cover__title' }, s.title),
+    h('span', { class: 'cover__author' }, s.author_name),
+    st?.tape ? h('span', { class: 'cover__tape' }, st.label) : null,
+  );
 }
 
 let toastTimer;

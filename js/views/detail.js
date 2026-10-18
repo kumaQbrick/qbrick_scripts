@@ -1,7 +1,7 @@
 import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
 import { state, isLoggedIn, isMember, isAdmin, myId } from '../lib/state.js';
-import { h, icon, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
+import { h, icon, cover, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
 import { pdfViewer } from '../lib/pdfviewer.js';
 
 export async function detailView({ params, go }) {
@@ -108,6 +108,7 @@ export async function detailView({ params, go }) {
   const updated = fmtDate(s.updated_at) !== fmtDate(s.created_at) ? fmtDate(s.updated_at) : null;
 
   const aside = h('aside', { class: 'detail__aside' },
+    cover(s, { large: true }),
     likeBox,
     h('dl', { class: 'facts' },
       fact('ジャンル', s.genres.join('・')),

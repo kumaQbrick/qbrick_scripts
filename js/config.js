@@ -20,8 +20,8 @@ export const LENGTHS = {
 export const STATUSES = {
   open: { label: '検討中' },
   unselected: { label: '未採用' },
-  in_production: { label: '制作中' },
-  completed: { label: '完成' },
+  in_production: { label: '制作中', tape: true },
+  completed: { label: '完成', tape: true },
 };
 
 export const PERMISSIONS = {

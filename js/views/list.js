@@ -1,7 +1,7 @@
 import { GENRES, LENGTHS, STATUSES, PERMISSIONS, PAGE_SIZE } from '../config.js';
 import { sb } from '../lib/supabase.js';
 import { isLoggedIn, isMember, myId } from '../lib/state.js';
-import { h, icon, lengthText, errText, notice, toast } from '../lib/ui.js';
+import { h, icon, cover, lengthText, errText, notice, toast } from '../lib/ui.js';
 
 // 並び順。order は [列, 昇順か]
 const SORTS = {
@@ -161,6 +161,7 @@ export async function listView({ query, go }) {
 function card(s) {
   return h('li', {},
     h('a', { class: 'shelf__link', href: `#/s/${s.id}` },
+      cover(s),
       h('span', { class: 'shelf__title' }, s.title),
       h('span', { class: 'shelf__meta' }, `${s.author_name} / ${lengthText(s)}`),
       h('span', { class: 'shelf__meta' }, s.genres.join('・')),
