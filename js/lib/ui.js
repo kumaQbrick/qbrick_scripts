@@ -24,6 +24,8 @@ export function h(tag, props = {}, ...children) {
     }
   }
   add(el, children);
+  // selectはoptionを入れてからじゃないとvalueが効かない（これで1時間）
+  if (tag === 'select' && props?.value != null) el.value = props.value;
   return el;
 }
 
