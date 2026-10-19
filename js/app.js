@@ -8,6 +8,7 @@ import { formView } from './views/form.js';
 import { loginView, signupView, resetView, newPasswordView } from './views/auth.js';
 import { accountView } from './views/account.js';
 import { adminView } from './views/admin.js';
+import { aboutView } from './views/about.js';
 //import { testView } from './views/test.js';
 
 const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
@@ -25,6 +26,7 @@ const routes = [
   [/^\/new-password$/, newPasswordView, '新しいパスワード'],
   [/^\/account$/, accountView, 'アカウント'],
   [/^\/admin$/,   adminView, '管理'],
+  [/^\/about$/, aboutView, 'ルール'],
   //[/^\/test$/, testView, 'てすと'],
 ];
 
