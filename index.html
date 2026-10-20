@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- 検索エンジンに載せない -->
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>Qbrick 脚本棚</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="vendor/supabase/supabase.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-skip>本文へ移動</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="#/">
+        <span class="brand__circle">Qbrick</span>
+        <span class="brand__name" id="brand-name">脚本棚</span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="メインメニュー"></nav>
+    </div>
+  </header>
+  <main id="main" class="site-main" tabindex="-1">
+    <p class="loading">読み込み中…</p>
+  </main>
+  <footer class="site-footer">
+    <p>熊本大学 映画研究サークル Qbrick 制作班</p>
+    <p><a href="#/about">使い方とルール</a></p>
+  </footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">このサイトを使うには JavaScript を有効にしてください。</p></noscript>
+</body>
+</html>
