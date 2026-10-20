@@ -1,0 +1,14 @@
+# 秘密の鍵（絶対にコミットしない）
+.env
+tools/.env
+
+# バックアップ（未発表の脚本・メールアドレス・招待コードを含む）
+backups/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
