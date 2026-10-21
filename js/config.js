@@ -1,7 +1,7 @@
 // Supabase > Project Settings > API Keys
 // publishable key は公開されてOK。secret key は絶対にここに書かない。
-export const SUPABASE_URL = 'https://xmeerhhimlsskljswnlk.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_muYuN1PTtdkq8qBPjcjq8Q_6BZ-naVH';
+export const SUPABASE_URL = 'https://dspajwhgojljjswmrnvo.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_gGR3p_GKze8gBGDal_nh4g_uRhLoNxj';
 
 // 名前を変えると、古い名前で投稿された脚本は絞り込みに出なくなる
 export const GENRES = [
