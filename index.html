@@ -3,35 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- 検索エンジンに載せない -->
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <title>Qbrick 脚本棚</title>
+  <title>脚本棚 | Qbrick</title>
+  <link rel="icon" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/logo-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <script src="vendor/supabase/supabase.js"></script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main" data-skip>本文へ移動</a>
+  <a class="skip-link" href="#main" data-skip>本文へ</a>
   <header class="site-header">
-    <div class="site-header__inner">
-      <a class="brand" href="#/">
-        <span class="brand__circle">Qbrick</span>
-        <span class="brand__name" id="brand-name">脚本棚</span>
-      </a>
-      <nav class="site-nav" id="site-nav" aria-label="メインメニュー"></nav>
-    </div>
+    <a class="brand" href="#/">
+      <img class="brand__logo" src="img/logo-180.png" alt="熊大映研 Qbrick" width="52" height="52">
+      <span class="brand__name">脚本棚</span>
+    </a>
+    <nav class="site-nav" id="site-nav"></nav>
   </header>
   <main id="main" class="site-main" tabindex="-1">
-    <p class="loading">読み込み中…</p>
+    <p class="muted">読み込み中…</p>
   </main>
   <footer class="site-footer">
-    <p>熊本大学 映画研究サークル Qbrick 制作班</p>
-    <p><a href="#/about">使い方とルール</a></p>
+    <a href="#/about">ルール</a>
+    <a href="https://www.instagram.com/kumaqbrick/" rel="noopener">Instagram</a>
   </footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <noscript><p class="noscript">このサイトを使うには JavaScript を有効にしてください。</p></noscript>
+  <noscript><p>JavaScript をオンにしてください。</p></noscript>
 </body>
 </html>

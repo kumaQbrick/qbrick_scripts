@@ -1,23 +1,6 @@
--- =====================================================================
--- Qbrick 脚本棚 : データベース定義
---
--- Supabase の「SQL Editor」にこのファイルの中身を全部貼り付けて実行すると、
--- テーブル・権限ルール（RLS）・関数・PDF保存用バケットがまとめて作られます。
--- 新しいプロジェクトに対して1回だけ実行してください。
---
--- 構成
---   profiles         … ユーザーの表示名・メンバー/管理者フラグ
---   scripts          … 脚本（PDFは Storage の scripts バケットに保存）
---   likes            … いいね（1アカウント1脚本1回）
---   comments         … コメント本文（匿名のときは投稿者IDを持たない）
---   comment_authors  … コメントの本当の投稿者（本人と管理者だけが読める）
---   app_secrets      … 招待コードなど（APIからは読めない）
--- =====================================================================
+-- 脚本棚のDB。新しい Supabase プロジェクトの SQL Editor で1回だけ流す
 
-
--- ---------------------------------------------------------------------
--- 1. テーブル
--- ---------------------------------------------------------------------
+-- テーブル
 
 create table public.app_secrets (
   key   text primary key,
@@ -34,7 +17,7 @@ create table public.profiles (
 
 create table public.scripts (
   id               uuid primary key default gen_random_uuid(),
-  -- 投稿者。アカウントが削除されても脚本は残す（null になる）
+  -- アカウントを消しても脚本は残す
   owner_id         uuid default auth.uid() references public.profiles (id) on delete set null,
   title            text not null check (char_length(btrim(title)) between 1 and 100),
   author_name      text not null check (char_length(btrim(author_name)) between 1 and 50),
@@ -73,7 +56,7 @@ create index likes_user_idx on public.likes (user_id);
 create table public.comments (
   id           uuid primary key default gen_random_uuid(),
   script_id    uuid not null references public.scripts (id) on delete cascade,
-  -- 名前つきコメントのときだけ投稿者IDが入る。匿名なら null
+  -- 匿名なら null。本当の投稿者は comment_authors に入る
   author_id    uuid references public.profiles (id) on delete set null,
   is_anonymous boolean not null default false,
   body         text not null check (char_length(btrim(body)) between 1 and 2000),
@@ -89,12 +72,8 @@ create table public.comment_authors (
 
 create index comment_authors_user_idx on public.comment_authors (user_id);
 
+-- 判定用（RLS の中で使う）
 
--- ---------------------------------------------------------------------
--- 2. 判定用の関数
--- ---------------------------------------------------------------------
-
--- ログイン中のユーザーがメンバーか（管理者はメンバー扱い）
 create function public.is_member()
 returns boolean
 language sql stable security definer set search_path = ''
@@ -105,7 +84,6 @@ as $$
   );
 $$;
 
--- ログイン中のユーザーが管理者か
 create function public.is_admin()
 returns boolean
 language sql stable security definer set search_path = ''
@@ -116,12 +94,9 @@ as $$
   );
 $$;
 
+-- トリガー
 
--- ---------------------------------------------------------------------
--- 3. トリガー
--- ---------------------------------------------------------------------
-
--- 新規登録時に profiles を作る。招待コードが正しければメンバーにする。
+-- 登録時に profiles を作る。招待コードが合っていればメンバー
 create function public.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = ''
@@ -151,7 +126,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- 内容が変わったときだけ updated_at を更新（いいね数などの変化では更新しない）
+-- いいね・コメント数の変化では updated_at を動かさない
 create function public.touch_script_updated_at()
 returns trigger
 language plpgsql
@@ -170,7 +145,6 @@ create trigger scripts_touch_updated_at
   before update on public.scripts
   for each row execute function public.touch_script_updated_at();
 
--- いいね数・コメント数を数え直す
 create function public.update_script_counters()
 returns trigger
 language plpgsql security definer set search_path = ''
@@ -199,11 +173,8 @@ create trigger comments_counter
   after insert or delete on public.comments
   for each row execute function public.update_script_counters();
 
-
--- ---------------------------------------------------------------------
--- 4. 権限（どの列を書き換えられるか）
---    Supabase は新しいテーブルに全権限を付けるので、いったん外してから必要な分だけ付ける
--- ---------------------------------------------------------------------
+-- 列単位の権限
+-- Supabase は新しいテーブルに全権限を付けるので、一度外して必要な分だけ付け直す。
 
 revoke all on public.app_secrets from anon, authenticated;
 
@@ -223,26 +194,22 @@ revoke insert, update, delete on public.likes from anon, authenticated;
 grant insert (script_id) on public.likes to authenticated;
 grant delete on public.likes to authenticated;
 
--- コメントの投稿は post_comment() 関数からだけ
+-- コメントは post_comment() 経由でしか書けない（匿名でも投稿者を記録するため）
 revoke insert, update, delete on public.comments from anon, authenticated;
 grant delete on public.comments to authenticated;
 
 revoke all on public.comment_authors from anon;
 revoke insert, update, delete on public.comment_authors from authenticated;
 
+-- RLS
 
--- ---------------------------------------------------------------------
--- 5. 行ごとのルール（RLS）
--- ---------------------------------------------------------------------
-
-alter table public.app_secrets     enable row level security;  -- ポリシーなし = だれも読めない
+alter table public.app_secrets     enable row level security;  -- ポリシーなし = 誰も読めない
 alter table public.profiles        enable row level security;
 alter table public.scripts         enable row level security;
 alter table public.likes           enable row level security;
 alter table public.comments        enable row level security;
 alter table public.comment_authors enable row level security;
 
--- profiles: 表示名はだれでも読める。自分の表示名だけ変えられる
 create policy "profiles: read all" on public.profiles
   for select using (true);
 create policy "profiles: update self" on public.profiles
@@ -250,7 +217,7 @@ create policy "profiles: update self" on public.profiles
   using (id = (select auth.uid()))
   with check (id = (select auth.uid()));
 
--- scripts: 公開はだれでも、メンバー限定はメンバーと投稿者本人だけが読める
+-- メンバー限定はメンバーと本人だけ
 create policy "scripts: read" on public.scripts
   for select using (
     visibility = 'public'
@@ -274,7 +241,7 @@ create policy "scripts: delete by owner or admin" on public.scripts
   for delete to authenticated
   using (owner_id = (select auth.uid()) or (select public.is_admin()));
 
--- likes: だれがいいねしたかは本人にしか見えない（数は scripts.like_count で公開）
+-- 誰が押したかは本人にしか見えない。数は scripts.like_count
 create policy "likes: read own" on public.likes
   for select to authenticated
   using (user_id = (select auth.uid()));
@@ -283,7 +250,7 @@ create policy "likes: insert by member" on public.likes
   with check (
     user_id = (select auth.uid())
     and (select public.is_member())
-    -- 読める脚本だけ、かつ自分の脚本にはいいねできない
+    -- 読める脚本だけ。自分の脚本は不可
     and exists (select 1 from public.scripts s
                  where s.id = likes.script_id
                    and s.owner_id is distinct from (select auth.uid()))
@@ -292,7 +259,6 @@ create policy "likes: delete own" on public.likes
   for delete to authenticated
   using (user_id = (select auth.uid()));
 
--- comments: 読める脚本のコメントは読める。自分のコメントと、管理者は全部消せる
 create policy "comments: read" on public.comments
   for select using (exists (select 1 from public.scripts s where s.id = comments.script_id));
 create policy "comments: delete own or admin" on public.comments
@@ -303,17 +269,13 @@ create policy "comments: delete own or admin" on public.comments
                 where ca.comment_id = comments.id and ca.user_id = (select auth.uid()))
   );
 
--- comment_authors: 本人と管理者だけ
+-- 本人と管理者だけ
 create policy "comment_authors: read own or admin" on public.comment_authors
   for select to authenticated
   using (user_id = (select auth.uid()) or (select public.is_admin()));
 
+-- 画面から呼ぶ関数
 
--- ---------------------------------------------------------------------
--- 6. 画面から呼ぶ関数（RPC）
--- ---------------------------------------------------------------------
-
--- コメント投稿（匿名でも comment_authors に本当の投稿者を記録する）
 create function public.post_comment(p_script_id uuid, p_body text, p_anonymous boolean)
 returns uuid
 language plpgsql security definer set search_path = ''
@@ -343,7 +305,6 @@ begin
 end;
 $$;
 
--- 登録後に招待コードを入力してメンバーになる
 create function public.redeem_invite(p_code text)
 returns boolean
 language plpgsql security definer set search_path = ''
@@ -364,7 +325,6 @@ begin
 end;
 $$;
 
--- 管理者: ユーザー一覧（メールアドレス付き）
 create function public.admin_list_users()
 returns table (
   id uuid, display_name text, email text,
@@ -384,7 +344,6 @@ begin
 end;
 $$;
 
--- 管理者: メンバー権限の付け外し
 create function public.admin_set_member(p_user_id uuid, p_value boolean)
 returns void
 language plpgsql security definer set search_path = ''
@@ -397,7 +356,7 @@ begin
 end;
 $$;
 
--- 管理者: 管理者権限の付け外し（最後の1人は外せない）
+-- 管理者を0人にはできない
 create function public.admin_set_admin(p_user_id uuid, p_value boolean)
 returns void
 language plpgsql security definer set search_path = ''
@@ -419,7 +378,6 @@ begin
 end;
 $$;
 
--- 管理者: 招待コードの確認と変更
 create function public.admin_get_invite_code()
 returns text
 language plpgsql security definer set search_path = ''
@@ -450,11 +408,10 @@ begin
 end;
 $$;
 
--- 内部用の関数は画面から直接呼べないようにする
 revoke execute on function public.handle_new_user()          from public, anon, authenticated;
 revoke execute on function public.touch_script_updated_at()  from public, anon, authenticated;
 revoke execute on function public.update_script_counters()   from public, anon, authenticated;
--- ログインしていない人は使えない関数
+-- 未ログインでは呼べないようにする
 revoke execute on function public.post_comment(uuid, text, boolean) from public, anon;
 revoke execute on function public.redeem_invite(text)               from public, anon;
 revoke execute on function public.admin_list_users()                from public, anon;
@@ -470,18 +427,13 @@ grant execute on function public.admin_set_admin(uuid, boolean)    to authentica
 grant execute on function public.admin_get_invite_code()           to authenticated;
 grant execute on function public.admin_set_invite_code(text)       to authenticated;
 
-
--- ---------------------------------------------------------------------
--- 7. PDF の保存場所（Storage）
---    ファイルの置き場所: scripts/<投稿者のユーザーID>/<ランダムなID>.pdf
---    バケットは非公開。閲覧は期限つきの署名URLで行う
--- ---------------------------------------------------------------------
+-- PDF置き場: scripts/<ユーザーID>/<ランダム>.pdf
+-- 非公開バケット。画面からは期限つきの署名URLで読む
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('scripts', 'scripts', false, 20971520, array['application/pdf'])  -- 20MB
 on conflict (id) do nothing;
 
--- アップロード: メンバーが自分のフォルダにだけ
 create policy "script pdf: upload own folder" on storage.objects
   for insert to authenticated
   with check (
@@ -490,7 +442,7 @@ create policy "script pdf: upload own folder" on storage.objects
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
--- 閲覧: その PDF を使っている脚本を読める人（= scripts の閲覧ルールと同じ）と、ファイルの持ち主
+-- その PDF を使っている脚本を読める人（scripts の RLS がそのまま効く）
 create policy "script pdf: read" on storage.objects
   for select using (
     bucket_id = 'scripts'
@@ -500,7 +452,6 @@ create policy "script pdf: read" on storage.objects
     )
   );
 
--- 削除: ファイルの持ち主と管理者
 create policy "script pdf: delete own or admin" on storage.objects
   for delete to authenticated
   using (

@@ -1,21 +1,9 @@
 import { sb } from './supabase.js';
 
-// ログイン状態をまとめて持つ
-export const state = {
-  user: null,     // Supabase Auth のユーザー
-  profile: null,  // profiles テーブルの行（display_name, is_member, is_admin）
-};
+export const state = { user: null, profile: null };
 
 const listeners = new Set();
-
-export function onStateChange(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-
-function emit() {
-  for (const fn of listeners) fn(state);
-}
+export const onStateChange = (fn) => listeners.add(fn);
 
 export async function setUser(user) {
   state.user = user ?? null;
@@ -23,9 +11,8 @@ export async function setUser(user) {
 }
 
 export async function refreshProfile() {
-  if (!state.user) {
-    state.profile = null;
-  } else {
+  state.profile = null;
+  if (state.user) {
     const { data, error } = await sb
       .from('profiles')
       .select('id, display_name, is_member, is_admin, created_at')
@@ -34,10 +21,10 @@ export async function refreshProfile() {
     if (error) console.error(error);
     state.profile = data ?? null;
   }
-  emit();
+  listeners.forEach((fn) => fn(state));
 }
 
 export const isLoggedIn = () => !!state.user;
-export const isMember = () => !!state.profile && (state.profile.is_member || state.profile.is_admin);
+export const isMember = () => !!(state.profile?.is_member || state.profile?.is_admin);
 export const isAdmin = () => !!state.profile?.is_admin;
 export const myId = () => state.user?.id ?? null;

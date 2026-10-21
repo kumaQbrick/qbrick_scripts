@@ -11,59 +11,51 @@ export async function detailView({ params, go }) {
 
   if (!s) {
     return h('section', { class: 'page narrow' },
-      h('h1', { class: 'page-title' }, '脚本が見つかりません'),
-      h('p', {}, '削除されたか、メンバー限定の脚本の可能性があります。'),
-      !isLoggedIn() ? h('p', {}, h('a', { class: 'btn btn--primary', href: '#/login' }, 'ログインして見る')) : null,
-      h('p', {}, h('a', { href: '#/' }, '脚本一覧に戻る')),
+      h('h1', {}, '見つかりません'),
+      h('p', {}, '消されたか、メンバー限定の脚本かもしれません。'),
+      !isLoggedIn() && h('p', {}, h('a', { class: 'btn btn--ink', href: '#/login' }, 'ログイン')),
+      h('p', {}, h('a', { href: '#/' }, '一覧へ')),
     );
   }
 
-  const isOwner = s.owner_id && s.owner_id === myId();
+  const isOwner = !!s.owner_id && s.owner_id === myId();
   const canEdit = (isOwner && isMember()) || isAdmin();
   const canDelete = isOwner || isAdmin();
 
-  // ---- PDF ----
-  const [viewUrl, downloadUrl] = await Promise.all([
+  // PDF はバケットが非公開なので、期限つきの URL を毎回発行する
+  const [view, dl] = await Promise.all([
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS),
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS, { download: s.pdf_filename }),
   ]);
   let viewer = null;
-  let pdfSection;
-  if (viewUrl.error || !viewUrl.data?.signedUrl) {
-    pdfSection = notice('error', 'PDFを読み込めませんでした。', viewUrl.error ? errText(viewUrl.error) : '');
+  let reader;
+  if (!view.data?.signedUrl) {
+    reader = notice('error', 'PDFを読み込めませんでした。', view.error ? errText(view.error) : '');
   } else {
-    viewer = pdfViewer(viewUrl.data.signedUrl);
-    pdfSection = h('div', { class: 'reader' },
+    viewer = pdfViewer(view.data.signedUrl);
+    reader = h('div', { class: 'reader' },
       h('div', { class: 'reader__bar' },
-        h('span', { class: 'reader__file' }, icon('file'), s.pdf_filename, s.pdf_size ? `（${fmtSize(s.pdf_size)}）` : ''),
-        h('span', { class: 'reader__actions' },
-          h('a', { class: 'btn btn--small', href: viewUrl.data.signedUrl, target: '_blank', rel: 'noopener' }, '新しいタブで開く'),
-          downloadUrl.data?.signedUrl
-            ? h('a', { class: 'btn btn--small', href: downloadUrl.data.signedUrl }, 'ダウンロード')
-            : null,
-        ),
+        h('span', { class: 'reader__file' }, s.pdf_filename, s.pdf_size ? ` (${fmtSize(s.pdf_size)})` : ''),
+        h('a', { href: view.data.signedUrl, target: '_blank', rel: 'noopener' }, '別タブで開く'),
+        dl.data?.signedUrl && h('a', { href: dl.data.signedUrl }, 'ダウンロード'),
       ),
       viewer.el,
     );
   }
 
-  // ---- いいね ----
-  const likeArea = h('div', { class: 'like' });
+  const likeBox = h('div', { class: 'like' });
   await renderLike();
 
   async function renderLike() {
-    const countText = `${s.like_count}`;
+    const label = [icon('heart'), ' いいね ', h('b', {}, s.like_count)];
     if (!isLoggedIn()) {
-      likeArea.replaceChildren(
-        h('a', { class: 'like__btn', href: '#/login' }, icon('heart'), 'いいね', h('span', { class: 'like__count' }, countText)),
-        h('span', { class: 'like__note' }, 'ログインするといいねできます'),
-      );
+      likeBox.replaceChildren(h('a', { class: 'like__btn', href: '#/login' }, ...label));
       return;
     }
     if (!isMember() || isOwner) {
-      likeArea.replaceChildren(
-        h('span', { class: 'like__btn is-disabled' }, icon('heart'), 'いいね', h('span', { class: 'like__count' }, countText)),
-        h('span', { class: 'like__note' }, isOwner ? '自分の脚本にはいいねできません' : 'メンバーになるといいねできます'),
+      likeBox.replaceChildren(
+        h('span', { class: 'like__btn is-off' }, ...label),
+        isOwner && h('small', {}, '自分の脚本'),
       );
       return;
     }
@@ -72,7 +64,7 @@ export async function detailView({ params, go }) {
     const btn = h('button', {
       type: 'button',
       class: `like__btn${liked ? ' is-on' : ''}`,
-      'aria-pressed': liked ? 'true' : 'false',
+      'aria-pressed': String(liked),
       onclick: async () => {
         btn.disabled = true;
         const res = liked
@@ -83,85 +75,69 @@ export async function detailView({ params, go }) {
         if (data) s.like_count = data.like_count;
         await renderLike();
       },
-    }, icon('heart'), liked ? 'いいね済み' : 'いいね', h('span', { class: 'like__count' }, countText));
-    likeArea.replaceChildren(btn, h('span', { class: 'like__note' }, 'だれがいいねしたかは表示されません'));
+    }, ...label);
+    likeBox.replaceChildren(btn);
   }
 
-  // ---- 削除 ----
   async function onDelete(e) {
-    if (!confirm(`「${s.title}」を削除します。PDFも消え、元に戻せません。よろしいですか？`)) return;
+    if (!confirm(`「${s.title}」を消します。PDFも消えて、元に戻せません。`)) return;
     await busy(e.currentTarget, '削除中…', async () => {
       const { error: delErr } = await sb.from('scripts').delete().eq('id', s.id);
       if (delErr) { toast(errText(delErr), 'error'); return; }
       const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
-      if (rmErr) console.warn('PDFの削除に失敗', rmErr);
-      toast('削除しました');
+      if (rmErr) console.warn(rmErr);
+      toast('消しました');
       go('/');
     });
   }
 
-  // ---- 情報欄 ----
   const perm = PERMISSIONS[s.usage_permission];
-  const info = h('aside', { class: 'detail__aside' },
-    cover(s, { size: 'large' }),
-    likeArea,
-    h('dl', { class: 'facts' },
-      fact('筆者', s.author_name),
-      fact('ジャンル', s.genres.join('／')),
-      fact('長さ', `${lengthText(s)}`, LENGTHS[s.length_category]?.hint),
-      fact('状態', STATUSES[s.status]?.label ?? s.status),
-      fact('使用について', perm?.label ?? s.usage_permission, perm?.desc),
-      fact('公開範囲', VISIBILITIES[s.visibility]?.label ?? s.visibility),
-      fact('投稿日', fmtDate(s.created_at)),
-      s.updated_at && fmtDate(s.updated_at) !== fmtDate(s.created_at) ? fact('更新日', fmtDate(s.updated_at)) : null,
-    ),
-    canEdit || canDelete
-      ? h('div', { class: 'detail__owner' },
-          canEdit ? h('a', { class: 'btn', href: `#/edit/${s.id}` }, '編集する') : null,
-          canDelete ? h('button', { type: 'button', class: 'btn btn--danger', onclick: onDelete }, '削除する') : null,
-          isAdmin() && !isOwner ? h('p', { class: 'field__help' }, '管理者として操作しています') : null,
-        )
-      : null,
-  );
+  const updated = fmtDate(s.updated_at) !== fmtDate(s.created_at) ? fmtDate(s.updated_at) : null;
 
-  const comments = await commentsSection(s);
+  const aside = h('aside', { class: 'detail__aside' },
+    cover(s, { large: true }),
+    likeBox,
+    h('dl', { class: 'facts' },
+      fact('ジャンル', s.genres.join('・')),
+      fact('長さ', lengthText(s), LENGTHS[s.length_category]?.hint),
+      fact('状態', STATUSES[s.status]?.label ?? s.status),
+      fact('使っていい？', perm?.label ?? s.usage_permission, perm?.desc),
+      fact('公開', VISIBILITIES[s.visibility]?.label ?? s.visibility),
+      fact('投稿', fmtDate(s.created_at) + (updated ? `（更新 ${updated}）` : '')),
+    ),
+    (canEdit || canDelete) && h('div', { class: 'detail__owner' },
+      canEdit && h('a', { class: 'btn', href: `#/edit/${s.id}` }, '編集'),
+      canDelete && h('button', { type: 'button', class: 'btn btn--danger', onclick: onDelete }, '削除'),
+    ),
+  );
 
   return {
     title: s.title,
     destroy: () => viewer?.destroy(),
     el: h('article', { class: 'page detail' },
-      h('p', { class: 'back' }, h('a', { href: '#/' }, '一覧に戻る')),
       h('header', { class: 'detail__head' },
-        h('h1', { class: 'detail__title' }, s.title),
-        h('p', { class: 'detail__byline' }, s.author_name),
+        h('h1', {}, s.title),
+        h('p', {}, s.author_name),
       ),
       h('div', { class: 'detail__body' },
-        info,
+        aside,
         h('div', { class: 'detail__main' },
-          s.synopsis
-            ? h('section', { class: 'synopsis' }, h('h2', { class: 'section-title' }, 'あらすじ'), h('p', {}, s.synopsis))
-            : null,
-          h('section', {}, h('h2', { class: 'section-title' }, '脚本'), pdfSection),
-          comments,
+          s.synopsis && h('p', { class: 'synopsis' }, s.synopsis),
+          reader,
+          await comments(s),
         ),
       ),
     ),
   };
 }
 
-function fact(label, value, help) {
-  return h('div', { class: 'facts__row' },
-    h('dt', {}, label),
-    h('dd', {}, value, help ? h('span', { class: 'facts__help' }, help) : null),
-  );
+function fact(label, value, sub) {
+  return h('div', {}, h('dt', {}, label), h('dd', {}, value, sub && h('small', {}, sub)));
 }
 
-// ---------------------------------------------------------------------
-// コメント
-// ---------------------------------------------------------------------
-async function commentsSection(s) {
+async function comments(s) {
   const list = h('ol', { class: 'comments' });
-  const heading = h('h2', { class: 'section-title' }, 'コメント');
+  const heading = h('h2', {}, 'コメント');
   const section = h('section', { class: 'comments-section' }, heading, list);
 
   async function load() {
@@ -172,7 +148,7 @@ async function commentsSection(s) {
       .order('created_at', { ascending: true });
     if (error) { list.replaceChildren(h('li', {}, notice('error', errText(error)))); return; }
 
-    // 自分のコメントか（匿名も含む）、管理者なら本当の投稿者
+    // 自分のコメントか、管理者なら匿名の中身。RLS で本人と管理者の分しか返ってこない
     const authors = new Map();
     if (isLoggedIn() && data.length) {
       const { data: rows } = await sb
@@ -182,51 +158,43 @@ async function commentsSection(s) {
       for (const r of rows ?? []) authors.set(r.comment_id, r);
     }
 
-    heading.textContent = `コメント（${data.length}）`;
+    heading.textContent = data.length ? `コメント ${data.length}` : 'コメント';
     if (!data.length) {
-      list.replaceChildren(h('li', { class: 'comments__empty' }, 'まだコメントはありません。'));
+      list.replaceChildren(h('li', { class: 'muted' }, 'まだありません'));
       return;
     }
     list.replaceChildren(...data.map((c) => {
       const real = authors.get(c.id);
       const mine = real?.user_id === myId();
-      const name = c.is_anonymous ? '匿名' : (c.author?.display_name ?? '退会したユーザー');
-      return h('li', { class: `comment${c.is_anonymous ? ' comment--anon' : ''}` },
+      return h('li', { class: 'comment' },
         h('div', { class: 'comment__head' },
-          h('span', { class: 'comment__name' }, name),
-          mine ? h('span', { class: 'tag' }, 'あなた') : null,
-          isAdmin() && c.is_anonymous && real && !mine
-            ? h('span', { class: 'tag tag--admin' }, `投稿者: ${real.user?.display_name ?? '不明'}`)
-            : null,
-          h('time', { class: 'comment__time', datetime: c.created_at }, fmtDateTime(c.created_at)),
+          h('b', { class: c.is_anonymous ? 'muted' : null }, c.is_anonymous ? '匿名' : (c.author?.display_name ?? '退会した人')),
+          mine && h('span', { class: 'tag' }, '自分'),
+          isAdmin() && c.is_anonymous && real && !mine && h('span', { class: 'tag tag--admin' }, real.user?.display_name ?? '?'),
+          h('time', { datetime: c.created_at }, fmtDateTime(c.created_at)),
+          (mine || isAdmin()) && h('button', {
+            type: 'button', class: 'link-btn',
+            onclick: async () => {
+              if (!confirm('このコメントを消しますか？')) return;
+              const { error: e } = await sb.from('comments').delete().eq('id', c.id);
+              if (e) toast(errText(e), 'error'); else load();
+            },
+          }, '削除'),
         ),
-        h('p', { class: 'comment__body' }, c.body),
-        mine || isAdmin()
-          ? h('button', {
-              type: 'button', class: 'link-btn',
-              onclick: async () => {
-                if (!confirm('このコメントを削除しますか？')) return;
-                const { error: e } = await sb.from('comments').delete().eq('id', c.id);
-                if (e) toast(errText(e), 'error'); else { toast('コメントを削除しました'); load(); }
-              },
-            }, '削除')
-          : null,
+        h('p', {}, c.body),
       );
     }));
   }
 
   await load();
 
-  // 投稿フォーム
   if (!isLoggedIn()) {
-    section.append(notice('info', 'コメントするには ', h('a', { href: '#/login' }, 'ログイン'), ' してください。'));
+    section.append(notice('info', 'コメントするには', h('a', { href: '#/login' }, 'ログイン')));
   } else if (!isMember()) {
-    section.append(notice('info', 'コメントできるのはメンバーだけです。', h('a', { href: '#/account' }, '招待コードを入力する')));
+    section.append(notice('info', 'コメントはメンバーだけ。', h('a', { href: '#/account' }, '招待コードを入れる')));
   } else {
-    const body = h('textarea', { rows: 4, maxlength: 2000, required: true, 'aria-label': 'コメント', placeholder: '感想やアドバイスを書いてください' });
-    const counter = h('span', { class: 'comment-form__count' }, '0 / 2000');
-    body.addEventListener('input', () => { counter.textContent = `${body.value.length} / 2000`; });
-    const submit = h('button', { type: 'submit', class: 'btn btn--primary' }, 'コメントする');
+    const body = h('textarea', { rows: 3, maxlength: 2000, required: true, 'aria-label': 'コメント' });
+    const send = h('button', { type: 'submit', class: 'btn btn--ink' }, '送信');
     const form = h('form', {
       class: 'comment-form',
       onsubmit: async (e) => {
@@ -234,24 +202,21 @@ async function commentsSection(s) {
         const text = body.value.trim();
         if (!text) return;
         const anonymous = form.querySelector('input[name=as]:checked').value === 'anon';
-        await busy(submit, '送信中…', async () => {
+        await busy(send, '送信中…', async () => {
           const { error } = await sb.rpc('post_comment', { p_script_id: s.id, p_body: text, p_anonymous: anonymous });
           if (error) { toast(errText(error), 'error'); return; }
           body.value = '';
-          counter.textContent = '0 / 2000';
-          toast('コメントしました');
           await load();
         });
       },
     },
-      h('h3', { class: 'comment-form__title' }, 'コメントを書く'),
       body,
-      h('div', { class: 'comment-form__as', role: 'radiogroup', 'aria-label': '名前の表示' },
-        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'name', checked: true }), `名前を出す（${state.profile?.display_name ?? ''}）`),
-        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'anon' }), '匿名にする'),
+      h('div', { class: 'comment-form__foot' },
+        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'name', checked: true }), state.profile?.display_name ?? '名前を出す'),
+        h('label', {}, h('input', { type: 'radio', name: 'as', value: 'anon' }), '匿名'),
+        send,
       ),
-      h('p', { class: 'field__help' }, '匿名にしても、いじめや荒らしに対応するため、管理者には投稿者が分かるようになっています。'),
-      h('div', { class: 'comment-form__foot' }, counter, submit),
+      notice('info', '匿名でも、管理者には誰が書いたか分かります（荒らし対策）'),
     );
     section.append(form);
   }

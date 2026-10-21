@@ -4,14 +4,14 @@ import { isLoggedIn, isMember, myId } from '../lib/state.js';
 import { h, icon, cover, lengthText, errText, notice, toast } from '../lib/ui.js';
 
 const SORTS = {
-  new:      { label: '新しい順',     order: [['created_at', false]] },
-  updated:  { label: '更新された順', order: [['updated_at', false]] },
-  likes:    { label: 'いいねが多い順', order: [['like_count', false], ['created_at', false]] },
-  comments: { label: 'コメントが多い順', order: [['comment_count', false], ['created_at', false]] },
-  title:    { label: 'タイトル順',   order: [['title', true]] },
+  new:      { label: '新しい順', order: [['created_at', false]] },
+  updated:  { label: '更新順', order: [['updated_at', false]] },
+  likes:    { label: 'いいね順', order: [['like_count', false], ['created_at', false]] },
+  comments: { label: 'コメント順', order: [['comment_count', false], ['created_at', false]] },
+  title:    { label: 'タイトル順', order: [['title', true]] },
 };
 
-const COLUMNS = 'id, title, author_name, genres, length_category, runtime_minutes, status, usage_permission, visibility, like_count, comment_count, created_at, updated_at, owner_id';
+const COLUMNS = 'id, title, author_name, genres, length_category, runtime_minutes, status, visibility, like_count, comment_count, created_at';
 
 export async function listView({ query, go }) {
   const f = {
@@ -26,6 +26,7 @@ export async function listView({ query, go }) {
   };
   const filtered = !!(f.q || f.genre || f.length || f.status || f.perm || f.mine || f.liked);
 
+  // 条件は URL に入れる（そのまま共有できるように）
   function setFilter(patch) {
     const next = { ...f, ...patch };
     const p = new URLSearchParams();
@@ -37,18 +38,13 @@ export async function listView({ query, go }) {
     go(qs ? `/?${qs}` : '/');
   }
 
-  // ---- 絞り込みフォーム ----
-  const search = h('input', {
-    type: 'search', name: 'q', value: f.q, placeholder: 'タイトル・筆者・あらすじで探す',
-    'aria-label': 'キーワード',
-  });
+  const search = h('input', { type: 'search', value: f.q, placeholder: 'タイトル・筆者・あらすじ', 'aria-label': '検索' });
   const select = (key, label, entries) =>
     h('label', { class: 'filter' },
-      h('span', { class: 'filter__label' }, label),
-      h('select', {
-        value: f[key],
-        onchange: (e) => setFilter({ [key]: e.target.value }),
-      }, h('option', { value: '' }, 'すべて'), ...entries.map(([v, t]) => h('option', { value: v }, t))),
+      h('span', {}, label),
+      h('select', { value: f[key], onchange: (e) => setFilter({ [key]: e.target.value }) },
+        h('option', { value: '' }, 'ぜんぶ'),
+        ...entries.map(([v, t]) => h('option', { value: v }, t))),
     );
 
   const filters = h('form', {
@@ -61,28 +57,22 @@ export async function listView({ query, go }) {
       select('genre', 'ジャンル', GENRES.map((g) => [g, g])),
       select('length', '長さ', Object.entries(LENGTHS).map(([k, v]) => [k, v.label])),
       select('status', '状態', Object.entries(STATUSES).map(([k, v]) => [k, v.label])),
-      select('perm', '使用', Object.entries(PERMISSIONS).map(([k, v]) => [k, v.label])),
+      select('perm', '使っていい？', Object.entries(PERMISSIONS).map(([k, v]) => [k, v.label])),
       h('label', { class: 'filter' },
-        h('span', { class: 'filter__label' }, '並び順'),
+        h('span', {}, '並び'),
         h('select', { value: f.sort, onchange: (e) => setFilter({ sort: e.target.value }) },
-          ...Object.entries(SORTS).map(([k, v]) => h('option', { value: k }, v.label))),
-      ),
+          ...Object.entries(SORTS).map(([k, v]) => h('option', { value: k }, v.label)))),
     ),
-    isLoggedIn() ? h('div', { class: 'filters__toggles' },
-      h('label', { class: 'toggle' },
-        h('input', { type: 'checkbox', checked: f.mine, onchange: (e) => setFilter({ mine: e.target.checked }) }),
-        '自分の投稿だけ'),
-      h('label', { class: 'toggle' },
-        h('input', { type: 'checkbox', checked: f.liked, onchange: (e) => setFilter({ liked: e.target.checked }) }),
-        'いいねした脚本だけ'),
-    ) : null,
-    filtered ? h('p', { class: 'filters__clear' }, h('a', { href: '#/' }, '条件をすべて外す')) : null,
+    isLoggedIn() && h('div', { class: 'filters__toggles' },
+      h('label', {}, h('input', { type: 'checkbox', checked: f.mine, onchange: (e) => setFilter({ mine: e.target.checked }) }), '自分の'),
+      h('label', {}, h('input', { type: 'checkbox', checked: f.liked, onchange: (e) => setFilter({ liked: e.target.checked }) }), 'いいねした'),
+      filtered && h('a', { href: '#/' }, '条件をリセット'),
+    ),
   );
 
-  // ---- 一覧 ----
-  const summary = h('p', { class: 'list-summary' });
+  const summary = h('p', { class: 'count-line' });
   const grid = h('ol', { class: 'shelf' });
-  const more = h('button', { type: 'button', class: 'btn btn--ghost shelf-more', hidden: true }, 'もっと見る');
+  const more = h('button', { type: 'button', class: 'btn shelf-more', hidden: true }, 'もっと見る');
 
   let likedIds = null;
   if (f.liked) {
@@ -91,7 +81,7 @@ export async function listView({ query, go }) {
     likedIds = data.map((r) => r.script_id);
   }
 
-  async function fetchPage(offset) {
+  function fetchPage(offset) {
     let q = sb.from('scripts').select(COLUMNS, { count: 'exact' });
     if (f.genre) q = q.contains('genres', [f.genre]);
     if (f.length) q = q.eq('length_category', f.length);
@@ -99,12 +89,9 @@ export async function listView({ query, go }) {
     if (f.perm) q = q.eq('usage_permission', f.perm);
     if (f.mine) q = q.eq('owner_id', myId());
     if (likedIds) q = q.in('id', likedIds.length ? likedIds : ['00000000-0000-0000-0000-000000000000']);
-    // PostgREST の or() で意味を持つ記号は取り除く
+    // or() の区切り文字になる記号は消しておく
     const words = f.q.replace(/[,()"'\\%*:]/g, ' ').trim();
-    if (words) {
-      const like = `%${words}%`;
-      q = q.or(`title.ilike.${like},author_name.ilike.${like},synopsis.ilike.${like}`);
-    }
+    if (words) q = q.or(`title.ilike.%${words}%,author_name.ilike.%${words}%,synopsis.ilike.%${words}%`);
     for (const [col, asc] of SORTS[f.sort].order) q = q.order(col, { ascending: asc });
     return q.range(offset, offset + PAGE_SIZE - 1);
   }
@@ -115,10 +102,8 @@ export async function listView({ query, go }) {
     if (error) throw error;
     grid.append(...data.map(card));
     loaded += data.length;
-    const total = count ?? loaded;
-    summary.textContent = total ? `${total}本の脚本` : '';
+    summary.textContent = loaded ? `${count ?? loaded}本` : '';
     more.hidden = count == null ? data.length < PAGE_SIZE : loaded >= count;
-    return loaded;
   }
 
   more.addEventListener('click', async () => {
@@ -127,37 +112,22 @@ export async function listView({ query, go }) {
     more.disabled = false;
   });
 
-  const firstLoaded = await loadMore();
+  await loadMore();
 
   let empty = null;
-  if (firstLoaded === 0) {
-    empty = filtered
-      ? h('div', { class: 'empty' },
-          h('p', {}, '条件に合う脚本はありません。'),
-          h('p', {}, h('a', { href: '#/' }, '条件をすべて外す')))
-      : h('div', { class: 'empty' },
-          h('p', {}, 'まだ脚本がありません。'),
-          isMember()
-            ? h('p', {}, h('a', { class: 'btn btn--primary', href: '#/new' }, '最初の脚本を投稿する'))
-            : null);
+  if (loaded === 0) {
+    empty = h('div', { class: 'empty' },
+      filtered
+        ? h('p', {}, '条件に合う脚本はありません')
+        : h('p', {}, 'まだ1本もありません'),
+      !filtered && isMember() && h('a', { class: 'btn btn--ink', href: '#/new' }, '投稿する'));
   }
 
   return h('section', { class: 'page' },
-    h('div', { class: 'intro' },
-      h('h1', { class: 'intro__title' }, '採用されなかった脚本も、ここに残しておく。'),
-      h('p', { class: 'intro__text' },
-        'Qbrick 制作班に集まった脚本の棚です。読んで、いいねやコメントで感想を伝えてください。'),
-    ),
-    !isMember()
-      ? notice('info',
-          isLoggedIn()
-            ? 'メンバー限定の脚本は表示されていません。'
-            : 'メンバー限定の脚本は、ログインすると表示されます。',
-          ' ',
-          isLoggedIn()
-            ? h('a', { href: '#/account' }, '招待コードを入力する')
-            : h('a', { href: '#/login' }, 'ログイン'))
-      : null,
+    !isMember() && notice('info',
+      isLoggedIn()
+        ? ['メンバー限定の脚本は、', h('a', { href: '#/account' }, '招待コード'), 'を入れると読めます']
+        : ['メンバー限定の脚本は、', h('a', { href: '#/login' }, 'ログイン'), 'すると読めます']),
     filters,
     summary,
     empty ?? grid,
@@ -166,17 +136,16 @@ export async function listView({ query, go }) {
 }
 
 function card(s) {
-  const genres = s.genres.join('／');
-  return h('li', { class: 'shelf__item' },
+  return h('li', {},
     h('a', { class: 'shelf__link', href: `#/s/${s.id}` },
       cover(s),
       h('span', { class: 'shelf__title' }, s.title),
-      h('span', { class: 'shelf__meta' }, `${s.author_name}　${lengthText(s)}`),
-      h('span', { class: 'shelf__meta' }, genres),
+      h('span', { class: 'shelf__meta' }, `${s.author_name} / ${lengthText(s)}`),
+      h('span', { class: 'shelf__meta' }, s.genres.join('・')),
       h('span', { class: 'shelf__counts' },
-        h('span', { class: 'count' }, icon('heart'), h('span', { class: 'sr-only' }, 'いいね'), String(s.like_count)),
-        h('span', { class: 'count' }, icon('comment'), h('span', { class: 'sr-only' }, 'コメント'), String(s.comment_count)),
-        s.visibility === 'members' ? h('span', { class: 'count count--lock' }, icon('lock'), 'メンバー限定') : null,
+        h('span', { title: 'いいね' }, icon('heart'), h('span', { class: 'sr-only' }, 'いいね'), s.like_count),
+        h('span', { title: 'コメント' }, icon('comment'), h('span', { class: 'sr-only' }, 'コメント'), s.comment_count),
+        s.visibility === 'members' && h('span', { title: 'メンバー限定' }, icon('lock'), h('span', { class: 'sr-only' }, 'メンバー限定')),
       ),
     ),
   );

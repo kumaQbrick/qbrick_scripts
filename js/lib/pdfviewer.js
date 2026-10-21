@@ -1,6 +1,5 @@
 import { h } from './ui.js';
 
-// pdf.js はサイト内の vendor/pdfjs に同梱している（外部サービスに依存しないため）
 const BASE = new URL('../../vendor/pdfjs/', import.meta.url).href;
 
 let pdfjsPromise = null;
@@ -14,10 +13,9 @@ function loadPdfjs() {
   return pdfjsPromise;
 }
 
-// PDF をページごとに canvas へ描く。スマホでもそのまま読めるよう、画面の幅に合わせる。
-// 返り値: { el, destroy }
+// ページを画面幅に合わせて canvas に描く。見えそうになったページから順に描画
 export function pdfViewer(url) {
-  const status = h('p', { class: 'pdf__status' }, 'PDFを読み込み中…');
+  const status = h('p', { class: 'pdf__status' }, '読み込み中…');
   const pages = h('div', { class: 'pdf__pages' });
   const el = h('div', { class: 'pdf' }, status, pages);
 
@@ -39,9 +37,8 @@ export function pdfViewer(url) {
       }).promise;
       if (destroyed) return doc.destroy();
 
-      status.textContent = `全${doc.numPages}ページ`;
+      status.textContent = `${doc.numPages}ページ`;
 
-      // 1ページ目の縦横比を仮の大きさに使う
       const first = await doc.getPage(1);
       const v = first.getViewport({ scale: 1 });
       const ratio = `${v.width} / ${v.height}`;
@@ -67,7 +64,7 @@ export function pdfViewer(url) {
       }
     } catch (err) {
       console.error(err);
-      status.textContent = 'このブラウザではPDFを表示できませんでした。「新しいタブで開く」から読んでください。';
+      status.textContent = 'ここでは表示できませんでした。「別タブで開く」から読んでください';
       status.classList.add('is-error');
     }
   })();
