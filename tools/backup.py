@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 """
-脚本棚のバックアップを取るスクリプト
+脚本棚のバックアップ（テーブル全部・ユーザー一覧・PDF）
 
-Supabase の無料プランには自動バックアップがないので、管理者がときどき（学期ごとなど）
-手元のパソコンで実行して、データと PDF を保存しておく。
+    python3 tools/backup.py            # backups/日時/ に保存
+    python3 tools/backup.py --no-pdf   # データだけ
 
-使い方:
-    1. tools/.env.example を tools/.env にコピーして、URL と Secret key を書く
-       （.env は .gitignore 済み。絶対に GitHub に上げない）
-    2. python3 tools/backup.py
-       → backups/20261021-153000/ のようなフォルダにすべて保存される
-
-    オプション:
-        --no-pdf     PDF をダウンロードしない（データだけ）
-        --out DIR    保存先フォルダ（既定: リポジトリ直下の backups/）
-
-標準ライブラリだけで動くので、pip install は不要（Python 3.9 以上）。
+tools/.env に SUPABASE_URL と SUPABASE_SECRET_KEY を書いておく（.env.example を参照）。
+標準ライブラリだけで動く。
 """
 
 from __future__ import annotations
@@ -103,14 +94,13 @@ def dump_users(c: Client) -> list:
 
 
 def list_objects(c: Client, prefix: str = "") -> list[str]:
-    """バケット内のファイルのパスをすべて返す（フォルダは中までたどる）"""
     found, offset = [], 0
     while True:
         items = c.json("POST", f"/storage/v1/object/list/{BUCKET}",
                        body={"prefix": prefix, "limit": PAGE, "offset": offset})
         for item in items:
             path = f"{prefix}/{item['name']}" if prefix else item["name"]
-            if item.get("id") is None:  # フォルダ
+            if item.get("id") is None:  # id がないのはフォルダ
                 found.extend(list_objects(c, path))
             else:
                 found.append(path)
@@ -167,7 +157,7 @@ def main() -> None:
         for f in failed:
             print(f"  ! PDFを保存できませんでした: {f['title']}（{f['error']}）")
 
-    # どの脚本からも使われていないPDF（投稿の途中で失敗したものなど）を報告するだけ。消しはしない
+    # 投稿の途中で失敗したりして残った PDF。一覧にするだけで消さない
     try:
         orphans = sorted(set(list_objects(c)) - referenced)
         summary["unreferenced_pdfs"] = orphans
@@ -177,7 +167,7 @@ def main() -> None:
         summary["unreferenced_pdfs_error"] = str(e)
 
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("完了しました。このフォルダには招待コードやメールアドレスも入っているので、扱いに注意してください。")
+    print("完了。招待コードやメールアドレスも入っているので、GitHub などには置かないこと")
 
 
 if __name__ == "__main__":
