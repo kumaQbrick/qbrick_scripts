@@ -1,4 +1,4 @@
-import { LENGTHS, STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
+import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
 import { state, isLoggedIn, isMember, isAdmin, myId } from '../lib/state.js';
 import { h, icon, cover, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
@@ -99,9 +99,9 @@ export async function detailView({ params, go }) {
     likeBox,
     h('dl', { class: 'facts' },
       fact('ジャンル', s.genres.join('・')),
-      fact('長さ', lengthText(s), LENGTHS[s.length_category]?.hint),
+      fact('長さ', lengthText(s)),
       fact('状態', STATUSES[s.status]?.label ?? s.status),
-      fact('使っていい？', perm?.label ?? s.usage_permission, perm?.desc),
+      fact('使っていい？', perm?.label ?? s.usage_permission),
       fact('公開', VISIBILITIES[s.visibility]?.label ?? s.visibility),
       fact('投稿', fmtDate(s.created_at) + (updated ? `（更新 ${updated}）` : '')),
     ),
@@ -131,8 +131,8 @@ export async function detailView({ params, go }) {
   };
 }
 
-function fact(label, value, sub) {
-  return h('div', {}, h('dt', {}, label), h('dd', {}, value, sub && h('small', {}, sub)));
+function fact(label, value) {
+  return h('div', {}, h('dt', {}, label), h('dd', {}, value));
 }
 
 async function comments(s) {

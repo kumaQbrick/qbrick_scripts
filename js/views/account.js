@@ -51,7 +51,7 @@ export async function accountView({ go }) {
         toast('変更しました');
       });
     },
-  }, field('名前', name, { help: '脚本の「筆者」とは別で、コメントやメニューに出る名前です' }), h('div', { class: 'form-actions' }, nameBtn));
+  }, field('名前', name), h('div', { class: 'form-actions' }, nameBtn));
 
   const pw = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8 });
   const pwBtn = h('button', { type: 'submit', class: 'btn' }, '変更');

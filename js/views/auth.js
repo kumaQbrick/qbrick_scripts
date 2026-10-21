@@ -92,10 +92,10 @@ export async function signupView({ go }) {
       });
     },
   },
-    field('名前', name, { help: 'コメントなどに出ます。あとで変えられます' }),
+    field('名前', name),
     field('メールアドレス', email),
     field('パスワード', password, { help: `${MIN_PASSWORD}文字以上` }),
-    field('招待コード', code, { help: '管理者に聞いてください' }),
+    field('招待コード', code),
     msg,
     h('div', { class: 'form-actions' }, submit),
   );

@@ -54,4 +54,4 @@ http://localhost:8000/ を開く。ログインまで試すなら Supabase の R
 
 - supabase-js: MIT（`vendor/supabase/LICENSE`）
 - pdf.js: Apache 2.0（`vendor/pdfjs/LICENSE`）
-- Klee One（Google Fonts）: SIL Open Font License
+- Yusei Magic（Google Fonts）: SIL Open Font License

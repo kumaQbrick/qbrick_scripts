@@ -1,4 +1,4 @@
-/* ロゴに合わせて、白い紙・黒のペン・Q の金色だけ */
+/* ロゴに合わせて、白い紙・黒のマジック・Q の金色だけ */
 :root {
   --paper: #fff;
   --ink: #000;
@@ -8,7 +8,7 @@
   --gold-soft: #f4e6c6;
   --red: #b3261e;
 
-  --hand: 'Klee One', 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif;
+  --hand: 'Yusei Magic', 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif;
   --sans: system-ui, -apple-system, 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif;
   /* 手描きっぽい歪んだ角 */
   --wobble: 255px 12px 225px 10px / 10px 225px 12px 255px;
@@ -30,7 +30,7 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-h1, h2 { font-family: var(--hand); font-weight: 600; line-height: 1.4; margin: 0 0 16px; }
+h1, h2 { font-family: var(--hand); font-weight: 400; line-height: 1.4; margin: 0 0 16px; }
 h1 { font-size: 1.7rem; }
 h2 { font-size: 1.2rem; margin-top: 32px; }
 
@@ -63,7 +63,7 @@ code { font-size: 1em; padding: 0 6px; background: var(--gold-soft); }
 }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand__logo { width: 52px; height: 52px; display: block; }
-.brand__name { font-family: var(--hand); font-weight: 600; font-size: 1.6rem; letter-spacing: 0.1em; }
+.brand__name { font-family: var(--hand); font-weight: 400; font-size: 1.6rem; letter-spacing: 0.1em; }
 .site-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 20px; }
 .site-nav a { text-decoration: none; }
 .site-nav a:hover { text-decoration: underline; text-decoration-color: var(--gold); }
@@ -244,7 +244,6 @@ input[type=checkbox], input[type=radio] { width: 17px; height: 17px; margin: 0; 
 .cover__title {
   writing-mode: vertical-rl;
   font-family: var(--hand);
-  font-weight: 600;
   font-size: 1.15rem;
   line-height: 1.45;
   letter-spacing: 0.06em;
@@ -270,7 +269,6 @@ input[type=checkbox], input[type=radio] { width: 17px; height: 17px; margin: 0; 
   padding: 2px 16px 2px 14px;
   background: rgb(201 151 60 / 0.55);
   font-family: var(--hand);
-  font-weight: 600;
   font-size: 0.8rem;
   transform: rotate(-6deg);
   clip-path: polygon(0 0, 100% 4%, 97% 50%, 100% 96%, 0 100%, 3% 50%);
