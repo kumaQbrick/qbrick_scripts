@@ -51,7 +51,8 @@ async function render() {
   const { path, query } = parseHash();
   const route = routes.find(([re]) => re.test(path));
 
-  destroyCurrent?.();
+  // 前の画面の後片付けで失敗しても、画面の切り替えは止めない
+  try { destroyCurrent?.(); } catch (err) { console.error(err); }
   destroyCurrent = null;
 
   if (!route) {
@@ -69,7 +70,7 @@ async function render() {
   }
   // 読み込み中に別の画面へ移っていたら捨てる
   if (token !== renderToken) {
-    result?.destroy?.();
+    try { result?.destroy?.(); } catch (err) { console.error(err); }
     return;
   }
   destroyCurrent = result?.destroy ?? null;
