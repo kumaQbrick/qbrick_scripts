@@ -153,7 +153,7 @@ export async function formView({ params, go }) {
             // 差し替えたら前のPDFは消す
             const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
             if (rmErr) {
-              console.warn(rmErr);
+              console.warn(rmErr); // 消せなくて残ったファイルはbackup.pyが一覧にしてくれる
             }
           }
         } else {
