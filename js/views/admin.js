@@ -13,6 +13,7 @@ export async function adminView({ rerender }) {
     await inviteBlock(),
     await usersBlock(rerender),
     await commentsBlock(),
+    h('p', { class: 'muted' }, '引き継ぎ・バックアップ → リポジトリの docs/HANDOVER.md'),
   );
 }
 
