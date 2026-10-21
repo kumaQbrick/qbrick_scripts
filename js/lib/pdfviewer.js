@@ -19,6 +19,7 @@ export function pdfViewer(url) {
   const pages = h('div', { class: 'pdf__pages' });
   const el = h('div', { class: 'pdf' }, status, pages);
 
+  let task = null;
   let doc = null;
   let observer = null;
   let destroyed = false;
@@ -26,7 +27,8 @@ export function pdfViewer(url) {
   (async () => {
     try {
       const pdfjs = await loadPdfjs();
-      doc = await pdfjs.getDocument({
+      if (destroyed) return;
+      task = pdfjs.getDocument({
         url,
         cMapUrl: BASE + 'cmaps/',
         cMapPacked: true,
@@ -34,8 +36,9 @@ export function pdfViewer(url) {
         wasmUrl: BASE + 'wasm/',
         iccUrl: BASE + 'iccs/',
         isEvalSupported: false,
-      }).promise;
-      if (destroyed) return doc.destroy();
+      });
+      doc = await task.promise;
+      if (destroyed) return;
 
       status.textContent = `${doc.numPages}ページ`;
 
@@ -74,7 +77,8 @@ export function pdfViewer(url) {
     destroy() {
       destroyed = true;
       observer?.disconnect();
-      doc?.destroy();
+      // v6 では PDFDocumentProxy に destroy() がない。読み込みタスク側で後片付けする
+      task?.destroy();
     },
   };
 }
