@@ -6,12 +6,12 @@
 |---|---|
 | 管理者 | |
 | 副管理者 | |
-| GitHub | kirikiri-p / Qbrick_scripts |
-| Supabase | kirikiri-p's Project（xmeerhhimlsskljswnlk） |
-| サイト | https://kirikiri-p.github.io/Qbrick_scripts/ |
-| 最後のバックアップ | |
+| GitHub | kumaQbrick / Qbrick_scripts |
+| Supabase | qbrick_scripts（dspajwhgojljjswmrnvo） |
+| サイト | https://kumaqbrick.github.io/qbrick_scripts/ |
+| 最後のバックアップ |  |
 
-今は GitHub も Supabase も個人アカウントの持ち物になっている。卒業前に、サークル用アカウントか次の管理者に移すこと。
+卒業前に、次の管理者に移すこと。
 
 ## 代替わり
 
@@ -38,7 +38,7 @@ python3 tools/backup.py
 
 | 症状 | だいたいの原因 |
 |---|---|
-| 何も読み込めない | 1週間アクセスがなくて Supabase が止まった → ダッシュボードで Restore |
+| 何も読み込めない | 1週間アクセスがなくて Supabase が止まった → ダッシュボードで Resume project |
 | 確認メールが来ない | 標準のメール送信の上限。README の「確認メールについて」 |
 | メールのリンクで変な所に飛ぶ | Site URL / Redirect URLs がサイトのURLと違う |
 | PDF が出ない | 「別タブで開く」で読めるか確認。だめなら投稿者に上げ直してもらう |
@@ -71,7 +71,7 @@ python3 tools/backup.py
 
 ### 無料プランの上限（2026年10月時点の公式料金ページ。変わることがある）
 
-- 1週間アクセスがないと一時停止
+- 1週間アクセスが少ないと一時停止
 - ファイル 1GB（1ファイル 50MB。このサイトでは 20MB に制限）、DB 500MB
 - Usage 画面で使用量が見られる。PDF が1本 1MB 前後なら 900本くらいまで入る
 
