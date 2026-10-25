@@ -1,0 +1,41 @@
+# Supabase の無料プランは、1週間ほど DB へのアクセスが少ないと一時停止する。
+# 毎日2回、公開の脚本を1件だけ読みに行って、止まらないようにする。
+# 接続先と鍵は js/config.js から読むので、プロジェクトを移してもここは触らなくていい。
+# 使うのは publishable key だけ（もともとサイトで公開している鍵）。
+
+name: Supabase keepalive
+
+on:
+  schedule:
+    # UTC で書く。日本時間の 9:23 と 21:23
+    - cron: '23 0,12 * * *'
+  workflow_dispatch: # Actions タブの「Run workflow」で手動でも動かせる
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: js/config.js
+          sparse-checkout-cone-mode: false
+
+      - name: DB に1回問い合わせる
+        run: |
+          url=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)';.*/\1/p" js/config.js)
+          key=$(sed -n "s/^export const SUPABASE_KEY = '\(.*\)';.*/\1/p" js/config.js)
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "js/config.js から SUPABASE_URL / SUPABASE_KEY を読めませんでした"
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 3 --retry-delay 30 --retry-all-errors \
+            "$url/rest/v1/scripts?select=id&limit=1" \
+            -H "apikey: $key")
+          echo "HTTP $status"
+          # 200 以外なら失敗にする（GitHub から失敗のメールが届く）
+          [ "$status" = "200" ]
