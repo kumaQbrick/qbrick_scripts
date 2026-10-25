@@ -23,8 +23,8 @@ jobs:
       - name: DB に1回問い合わせる
         run: |
           curl -sSf -o config.js "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/js/config.js"
-          url=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)';.*/\1/p" js/config.js)
-          key=$(sed -n "s/^export const SUPABASE_KEY = '\(.*\)';.*/\1/p" js/config.js)
+          url=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)';.*/\1/p" config.js)
+          key=$(sed -n "s/^export const SUPABASE_KEY = '\(.*\)';.*/\1/p" config.js)
           if [ -z "$url" ] || [ -z "$key" ]; then
             echo "js/config.js から SUPABASE_URL / SUPABASE_KEY を読めませんでした"
             exit 1
