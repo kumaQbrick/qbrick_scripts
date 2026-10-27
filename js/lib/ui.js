@@ -1,20 +1,30 @@
 import { LENGTHS, STATUSES } from '../config.js';
 
-// h('a', { href: '#/' }, 'text', child...)  文字列は textContent で入る
+// 要素を作るやつ
+// h('a', { href: '#/' }, 'text', child...)  文字列はtextContentで入る（innerHTMLは使わない）
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(props ?? {})) {
     if (value == null || value === false) continue;
-    if (key === 'class') el.className = value;
-    else if (key === 'dataset') Object.assign(el.dataset, value);
-    else if (key === 'style' && typeof value === 'object') Object.assign(el.style, value);
-    else if (key === 'value') el.value = value;
-    else if (key.startsWith('on') && typeof value === 'function') el.addEventListener(key.slice(2), value);
-    else if (key in el && typeof value !== 'string') el[key] = value;
-    else el.setAttribute(key, value === true ? '' : String(value));
+    if (key === 'class') {
+      el.className = value;
+    } else if (key === 'dataset') {
+      Object.assign(el.dataset, value);
+    } else if (key === 'style' && typeof value === 'object') {
+      Object.assign(el.style, value);
+    } else if (key === 'value') {
+      el.value = value;
+    } else {
+      if (key.startsWith('on') && typeof value === 'function') {
+        el.addEventListener(key.slice(2), value);
+      } else {
+        if (key in el && typeof value !== 'string') el[key] = value;
+        else el.setAttribute(key, value === true ? '' : String(value));
+      }
+    }
   }
   add(el, children);
-  // select は option を入れてからでないと value が効かない
+  // selectはoptionを入れてからじゃないとvalueが効かない（これで1時間）
   if (tag === 'select' && props?.value != null) el.value = props.value;
   return el;
 }
@@ -27,13 +37,14 @@ function add(el, children) {
   }
 }
 
+// アイコン。24x24で線だけ
 const ICONS = {
   heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
   comment: 'M5 5h14v10H9l-4 4z',
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z',
 };
 export function icon(name) {
-  const NS = 'http://www.w3.org/2000/svg';
+  const NS = 'http://www.w3.org/2000/svg';   // createElementじゃなくてcreateElementNSじゃないと出ない
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('class', `icon icon--${name}`);
@@ -44,11 +55,14 @@ export function icon(name) {
   return svg;
 }
 
-const pad = (n) => String(n).padStart(2, '0');
+// 0埋め
+function pad(n) {
+  return n < 10 ? '0' + n : '' + n;
+}
 export function fmtDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+  var d = new Date(iso);
+  return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate());
 }
 export function fmtDateTime(iso) {
   if (!iso) return '';
@@ -56,9 +70,9 @@ export function fmtDateTime(iso) {
   return `${fmtDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 export function fmtSize(bytes) {
-  if (bytes == null) return '';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+    if (bytes == null) return '';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
 export function lengthText(s) {
@@ -66,7 +80,7 @@ export function lengthText(s) {
   return s.runtime_minutes ? `${len} ${s.runtime_minutes}分` : len;
 }
 
-// ホチキス留めの台本。縦書き・右綴じ
+// ホチキス留めの台本の表紙。縦書き・右綴じ
 export function cover(s, { large = false } = {}) {
   const st = STATUSES[s.status];
   return h('div', { class: `cover${large ? ' cover--large' : ''}`, 'aria-hidden': 'true' },
@@ -83,9 +97,11 @@ export function toast(message, kind = 'info') {
   el.textContent = message;
   el.className = `toast toast--${kind} is-visible`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('is-visible'), kind === 'error' ? 7000 : 3500);
+  toastTimer = setTimeout(() => el.classList.remove('is-visible'), kind === 'error' ? 7000 : 3500); // エラーは長めに出す
 }
 
+// supabaseのエラーが英語なので日本語にする
+// 出てきたのを見つけたら足していく
 export function errText(err) {
   const msg = String(err?.message ?? err ?? '');
   const table = [
@@ -94,14 +110,18 @@ export function errText(err) {
     [/User already registered/i, 'このメールアドレスはもう登録されています'],
     [/Password should be at least/i, 'パスワードが短すぎます'],
     [/rate limit|too many requests/i, '操作が多すぎます。少し待ってからもう一度'],
-    [/Failed to fetch|NetworkError|Load failed/i, '通信できませんでした'],
+    [/Failed to fetch|NetworkError|Load failed/i, '通信できませんでした'], // Load failedはiPhone
     [/duplicate key/i, 'もう登録されています'],
     [/row-level security|permission denied/i, '権限がありません。ログインし直すと直るかも'],
     [/exceeded the maximum allowed size|Payload too large/i, 'ファイルが大きすぎます'],
     [/mime type/i, 'PDF以外はアップロードできません'],
     [/JWT expired/i, 'ログインが切れました。もう一度ログインしてください'],
   ];
-  for (const [re, text] of table) if (re.test(msg)) return text;
+  for (const [re, text] of table) {
+    if (re.test(msg)) {
+      return text;
+    }
+  }
   return msg || 'うまくいきませんでした';
 }
 
@@ -129,16 +149,17 @@ export function radioGroup(name, legend, options, current) {
   );
 }
 
+// ボタンを押してる間「保存中…」とかにして押せなくする（二重送信防止）
 export async function busy(btn, text, fn) {
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = text;
-  try {
-    return await fn();
-  } finally {
-    btn.disabled = false;
-    btn.textContent = original;
-  }
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = text;
+    try {
+        return await fn();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+    }
 }
 
 // kind: info / warn / error / ok

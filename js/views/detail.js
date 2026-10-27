@@ -1,4 +1,4 @@
-import { LENGTHS, STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
+import { STATUSES, PERMISSIONS, VISIBILITIES, SIGNED_URL_SECONDS } from '../config.js';
 import { sb, BUCKET } from '../lib/supabase.js';
 import { state, isLoggedIn, isMember, isAdmin, myId } from '../lib/state.js';
 import { h, icon, cover, fmtDate, fmtDateTime, fmtSize, lengthText, errText, toast, notice, busy } from '../lib/ui.js';
@@ -8,6 +8,7 @@ export async function detailView({ params, go }) {
   const [id] = params;
   const { data: s, error } = await sb.from('scripts').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
+  //console.log(s);
 
   if (!s) {
     return h('section', { class: 'page narrow' },
@@ -22,7 +23,8 @@ export async function detailView({ params, go }) {
   const canEdit = (isOwner && isMember()) || isAdmin();
   const canDelete = isOwner || isAdmin();
 
-  // PDF はバケットが非公開なので、期限つきの URL を毎回発行する
+  // PDFのバケットは非公開なので期限つきのURLを毎回発行する
+  // 表示用とダウンロード用で2個いる（download付きのURLだと別タブで開いたときダウンロードになってしまう）
   const [view, dl] = await Promise.all([
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS),
     sb.storage.from(BUCKET).createSignedUrl(s.pdf_path, SIGNED_URL_SECONDS, { download: s.pdf_filename }),
@@ -46,49 +48,60 @@ export async function detailView({ params, go }) {
   const likeBox = h('div', { class: 'like' });
   await renderLike();
 
+  // いいねボタン
   async function renderLike() {
     const label = [icon('heart'), ' いいね ', h('b', {}, s.like_count)];
-    if (!isLoggedIn()) {
+    if (isLoggedIn()) {
+      if (isMember() && !isOwner) {
+        const { data: mine } = await sb.from('likes').select('script_id').eq('script_id', s.id).eq('user_id', myId()).maybeSingle();
+        const liked = !!mine;
+        const btn = h('button', {
+          type: 'button',
+          class: `like__btn${liked ? ' is-on' : ''}`,
+          'aria-pressed': String(liked),
+          onclick: async () => {
+            btn.disabled = true;   // 連打防止
+            let res;
+            if (liked) {
+              res = await sb.from('likes').delete().eq('script_id', s.id).eq('user_id', myId());
+            } else {
+              res = await sb.from('likes').insert({ script_id: s.id });
+            }
+            if (res.error) toast(errText(res.error), 'error');
+            // 数はDBのトリガーで数えてるので取り直す
+            const { data } = await sb.from('scripts').select('like_count').eq('id', s.id).single();
+            if (data) s.like_count = data.like_count;
+            await renderLike();
+          },
+        }, ...label);
+        likeBox.replaceChildren(btn);
+      } else {
+        // メンバーじゃない or 自分の脚本 → 押せない
+        likeBox.replaceChildren(
+          h('span', { class: 'like__btn is-off' }, ...label),
+          isOwner && h('small', {}, '自分の脚本'),
+        );
+      }
+    } else {
       likeBox.replaceChildren(h('a', { class: 'like__btn', href: '#/login' }, ...label));
-      return;
     }
-    if (!isMember() || isOwner) {
-      likeBox.replaceChildren(
-        h('span', { class: 'like__btn is-off' }, ...label),
-        isOwner && h('small', {}, '自分の脚本'),
-      );
-      return;
-    }
-    const { data: mine } = await sb.from('likes').select('script_id').eq('script_id', s.id).eq('user_id', myId()).maybeSingle();
-    const liked = !!mine;
-    const btn = h('button', {
-      type: 'button',
-      class: `like__btn${liked ? ' is-on' : ''}`,
-      'aria-pressed': String(liked),
-      onclick: async () => {
-        btn.disabled = true;
-        const res = liked
-          ? await sb.from('likes').delete().eq('script_id', s.id).eq('user_id', myId())
-          : await sb.from('likes').insert({ script_id: s.id });
-        if (res.error) toast(errText(res.error), 'error');
-        const { data } = await sb.from('scripts').select('like_count').eq('id', s.id).single();
-        if (data) s.like_count = data.like_count;
-        await renderLike();
-      },
-    }, ...label);
-    likeBox.replaceChildren(btn);
   }
 
   async function onDelete(e) {
-    if (!confirm(`「${s.title}」を消します。PDFも消えて、元に戻せません。`)) return;
-    await busy(e.currentTarget, '削除中…', async () => {
-      const { error: delErr } = await sb.from('scripts').delete().eq('id', s.id);
-      if (delErr) { toast(errText(delErr), 'error'); return; }
-      const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
-      if (rmErr) console.warn(rmErr);
-      toast('消しました');
-      go('/');
-    });
+      if (confirm(`「${s.title}」を消します。PDFも消えて、元に戻せません。`)) {
+          await busy(e.currentTarget, '削除中…', async () => {
+              const { error: delErr } = await sb.from('scripts').delete().eq('id', s.id);
+              if (!delErr) {
+                  // 先にDBを消してからPDF（逆だとPDFだけ消えて脚本が残ることがある）
+                  const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
+                  if (rmErr) console.warn(rmErr);
+                  toast('消しました');
+                  go('/');
+              } else {
+                  toast(errText(delErr), 'error');
+              }
+          });
+      }
   }
 
   const perm = PERMISSIONS[s.usage_permission];
@@ -99,9 +112,9 @@ export async function detailView({ params, go }) {
     likeBox,
     h('dl', { class: 'facts' },
       fact('ジャンル', s.genres.join('・')),
-      fact('長さ', lengthText(s), LENGTHS[s.length_category]?.hint),
+      fact('長さ', lengthText(s)),
       fact('状態', STATUSES[s.status]?.label ?? s.status),
-      fact('使っていい？', perm?.label ?? s.usage_permission, perm?.desc),
+      fact('使っていい？', perm?.label ?? s.usage_permission),
       fact('公開', VISIBILITIES[s.visibility]?.label ?? s.visibility),
       fact('投稿', fmtDate(s.created_at) + (updated ? `（更新 ${updated}）` : '')),
     ),
@@ -131,8 +144,8 @@ export async function detailView({ params, go }) {
   };
 }
 
-function fact(label, value, sub) {
-  return h('div', {}, h('dt', {}, label), h('dd', {}, value, sub && h('small', {}, sub)));
+function fact(label, value) {
+  return h('div', {}, h('dt', {}, label), h('dd', {}, value));
 }
 
 async function comments(s) {
@@ -148,14 +161,19 @@ async function comments(s) {
       .order('created_at', { ascending: true });
     if (error) { list.replaceChildren(h('li', {}, notice('error', errText(error)))); return; }
 
-    // 自分のコメントか、管理者なら匿名の中身。RLS で本人と管理者の分しか返ってこない
+    // 自分のコメントか、管理者なら匿名の中身
+    // RLSで本人と管理者の分しか返ってこないのでここでは何も考えなくていい
     const authors = new Map();
-    if (isLoggedIn() && data.length) {
-      const { data: rows } = await sb
-        .from('comment_authors')
-        .select('comment_id, user_id, user:profiles(display_name)')
-        .in('comment_id', data.map((c) => c.id));
-      for (const r of rows ?? []) authors.set(r.comment_id, r);
+    if (isLoggedIn()) {
+      if (data.length) {
+        const { data: rows } = await sb
+          .from('comment_authors')
+          .select('comment_id, user_id, user:profiles(display_name)')
+          .in('comment_id', data.map((c) => c.id));
+        for (const r of rows ?? []) {
+          authors.set(r.comment_id, r);
+        }
+      }
     }
 
     heading.textContent = data.length ? `コメント ${data.length}` : 'コメント';
@@ -175,9 +193,9 @@ async function comments(s) {
           (mine || isAdmin()) && h('button', {
             type: 'button', class: 'link-btn',
             onclick: async () => {
-              if (!confirm('このコメントを消しますか？')) return;
-              const { error: e } = await sb.from('comments').delete().eq('id', c.id);
-              if (e) toast(errText(e), 'error'); else load();
+              if (!confirm('このコメントを消しますか？')) return
+              const { error: e } = await sb.from('comments').delete().eq('id', c.id)
+              if (e) toast(errText(e), 'error'); else load()
             },
           }, '削除'),
         ),
@@ -200,14 +218,19 @@ async function comments(s) {
       onsubmit: async (e) => {
         e.preventDefault();
         const text = body.value.trim();
-        if (!text) return;
-        const anonymous = form.querySelector('input[name=as]:checked').value === 'anon';
-        await busy(send, '送信中…', async () => {
-          const { error } = await sb.rpc('post_comment', { p_script_id: s.id, p_body: text, p_anonymous: anonymous });
-          if (error) { toast(errText(error), 'error'); return; }
-          body.value = '';
-          await load();
-        });
+        if (text) {
+          const anonymous = form.querySelector('input[name=as]:checked').value === 'anon';
+          await busy(send, '送信中…', async () => {
+            // 匿名のときはauthor_idを空にして、本当の投稿者はcomment_authorsに入る（DBの関数の中で）
+            const { error } = await sb.rpc('post_comment', { p_script_id: s.id, p_body: text, p_anonymous: anonymous });
+            if (error) {
+              toast(errText(error), 'error');
+            } else {
+              body.value = '';
+              await load();
+            }
+          });
+        }
       },
     },
       body,

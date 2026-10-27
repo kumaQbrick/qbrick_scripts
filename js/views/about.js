@@ -1,9 +1,9 @@
 import { LENGTHS, PERMISSIONS, VISIBILITIES, MAX_PDF_MB } from '../config.js';
 import { h } from '../lib/ui.js';
 
+// ルールのページ。文章はそのうち直す
 export async function aboutView() {
-  const list = (entries) => h('dl', { class: 'facts' },
-    ...entries.map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', {}, v))));
+  const list = entries => h('dl', { class: 'facts' }, ...entries.map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', {}, v))));
 
   return h('section', { class: 'page narrow prose' },
     h('h1', {}, 'ルール'),
@@ -20,9 +20,17 @@ export async function aboutView() {
     list(Object.values(VISIBILITIES).map((v) => [v.label, v.desc])),
     h('p', {}, 'このサイトは検索に出ないようにしていますが、非公開ではありません。まだ撮っていない作品は「メンバーだけ」にしておくのがおすすめです。'),
 
+    // ↓ここは消さない（管理者に分かることを書いておくのが大事）
     h('h2', {}, '匿名について'),
     h('p', {}, 'コメントは匿名にできますが、管理者には誰が書いたか分かります。荒らしやいじめへの対応のためで、それ以外には使いません。'),
     h('p', {}, 'いいねを誰が押したかは、画面には出ません。'),
+
+    h('h2', {}, '投稿するとき'),
+    h('ul', {},
+      h('li', {}, '投稿できるのは自分の脚本か、共作者全員がOKしたものだけ'),
+      h('li', {}, '筆者はペンネームでも共作でもOK。登録した名前（コメントに出る名前）とは別です'),
+      h('li', {}, '上映時間はだいたいでいいし、空でもいいです'),
+    ),
 
     h('h2', {}, '他の人の脚本を使うとき'),
     list(Object.values(PERMISSIONS).map((p) => [p.label, p.desc])),
@@ -30,8 +38,8 @@ export async function aboutView() {
     h('h2', {}, '長さの目安'),
     list(Object.values(LENGTHS).map((l) => [l.label, l.hint])),
 
-    h('h2', {}, 'ファイル'),
-    h('p', {}, `PDFだけ、${MAX_PDF_MB}MBまで。Wordなどは「PDFで保存」してから投稿してください。`),
+      h('h2', {}, 'ファイル'),
+      h('p', {}, `PDFだけ、${MAX_PDF_MB}MBまで。Wordなどは「PDFで保存」してから投稿してください。`),
 
     h('p', { class: 'muted' }, '困ったら管理者まで。'),
   );

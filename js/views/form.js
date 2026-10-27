@@ -3,7 +3,7 @@ import { sb, BUCKET } from '../lib/supabase.js';
 import { state, isLoggedIn, isMember, isAdmin, myId } from '../lib/state.js';
 import { h, field, radioGroup, errText, toast, notice, fmtSize } from '../lib/ui.js';
 
-const MAX_GENRES = 3;
+const MAX_GENRES = 3; // 多すぎると一覧で読めないので
 
 export async function formView({ params, go }) {
   const editId = params[0] ?? null;
@@ -11,13 +11,20 @@ export async function formView({ params, go }) {
   if (!isLoggedIn()) return gate('投稿にはログインが必要です。', h('a', { class: 'btn btn--ink', href: '#/login' }, 'ログイン'));
   if (!isMember()) return gate('投稿はメンバーだけです。', h('a', { class: 'btn btn--ink', href: '#/account' }, '招待コードを入れる'));
 
+  // 編集のときは今のを読み込む
   let s = null;
   if (editId) {
     const { data, error } = await sb.from('scripts').select('*').eq('id', editId).maybeSingle();
     if (error) throw error;
-    if (!data) return gate('脚本が見つかりません。');
-    if (data.owner_id !== myId() && !isAdmin()) return gate('編集できるのは投稿した本人と管理者だけです。');
-    s = data;
+    if (data) {
+      if (data.owner_id === myId() || isAdmin()) {
+        s = data;
+      } else {
+        return gate('編集できるのは投稿した本人と管理者だけです。');
+      }
+    } else {
+      return gate('脚本が見つかりません。');
+    }
   }
 
   const v = s ?? {
@@ -32,12 +39,16 @@ export async function formView({ params, go }) {
   const runtime = h('input', { type: 'number', min: 1, max: 600, inputmode: 'numeric', value: v.runtime_minutes ?? '', class: 'input--short' });
   const status = h('select', { value: v.status }, ...Object.entries(STATUSES).map(([k, x]) => h('option', { value: k }, x.label)));
 
-  // config から消えたジャンルが付いている脚本は、そのジャンルも残して表示する
+  // configから消したジャンルが付いてる脚本は、そのジャンルも残して表示する
+  // （じゃないと編集して保存したときに勝手に消える）
   const genreNames = [...GENRES, ...v.genres.filter((g) => !GENRES.includes(g))];
   const genreBoxes = genreNames.map((g) => h('input', { type: 'checkbox', value: g, checked: v.genres.includes(g) }));
   const limitGenres = () => {
-    const n = genreBoxes.filter((b) => b.checked).length;
-    genreBoxes.forEach((b) => { b.disabled = !b.checked && n >= MAX_GENRES; });
+      var n = 0;
+      for (var i = 0; i < genreBoxes.length; i++) {
+          if (genreBoxes[i].checked) n++;
+      }
+      genreBoxes.forEach((b) => { b.disabled = !b.checked && n >= MAX_GENRES; });
   };
   genreBoxes.forEach((b) => b.addEventListener('change', limitGenres));
   limitGenres();
@@ -54,23 +65,22 @@ export async function formView({ params, go }) {
 
   const form = h('form', { class: 'script-form', novalidate: true, onsubmit },
     field('タイトル', title),
-    field('筆者', author, { help: 'ペンネーム・共作もOK' }),
+    field('筆者', author),
     field('あらすじ', synopsis),
     h('fieldset', { class: 'field' },
       h('legend', { class: 'field__label' }, `ジャンル（${MAX_GENRES}つまで）`),
       h('div', { class: 'chips' }, ...genreBoxes.map((box) => h('label', {}, box, box.value))),
     ),
-    radioGroup('length_category', '長さ', Object.entries(LENGTHS).map(([k, x]) => [k, x.label, x.hint]), v.length_category),
-    field('上映時間（分）', runtime, { help: 'だいたいでOK。空でも可' }),
+    radioGroup('length_category', '長さ', Object.entries(LENGTHS).map(([k, x]) => [k, x.label]), v.length_category),
+    field('上映時間（分）', runtime),
     field('状態', status),
-    radioGroup('usage_permission', '他の人が使っていい？', Object.entries(PERMISSIONS).map(([k, x]) => [k, x.label, x.desc]), v.usage_permission),
-    radioGroup('visibility', '公開範囲', Object.entries(VISIBILITIES).map(([k, x]) => [k, x.label, x.desc]), v.visibility),
+    radioGroup('usage_permission', '他の人が使っていい？', Object.entries(PERMISSIONS).map(([k, x]) => [k, x.label]), v.usage_permission),
+    radioGroup('visibility', '公開範囲', Object.entries(VISIBILITIES).map(([k, x]) => [k, x.label]), v.visibility),
     h('div', { class: 'field' },
       h('label', { class: 'field__label', for: 'pdf-input' }, s ? 'PDFを差し替える' : 'PDF'),
       pdf,
       pdfInfo,
     ),
-    notice('info', '投稿できるのは自分の脚本か、共作者全員がOKしたものだけ'),
     errorBox,
     h('div', { class: 'form-actions' },
       submit,
@@ -95,12 +105,17 @@ export async function formView({ params, go }) {
     };
     const file = pdf.files[0] ?? null;
 
+    // チェック
     const problems = [];
     if (!values.title) problems.push('タイトルが空です');
     if (!values.author_name) problems.push('筆者が空です');
     if (!values.genres.length) problems.push('ジャンルを1つ以上選んでください');
     const rt = values.runtime_minutes;
-    if (rt != null && !(Number.isInteger(rt) && rt >= 1 && rt <= 600)) problems.push('上映時間は1〜600の整数で');
+    if (rt != null) {
+      if (!(Number.isInteger(rt) && rt >= 1 && rt <= 600)) {
+        problems.push('上映時間は1〜600の整数で');
+      }
+    }
     if (!s && !file) problems.push('PDFを選んでください');
     if (file) {
       const p = await checkPdf(file);
@@ -108,7 +123,7 @@ export async function formView({ params, go }) {
     }
     if (problems.length) {
       errorBox.replaceChildren(notice('error', h('ul', {}, ...problems.map((p) => h('li', {}, p)))));
-      errorBox.scrollIntoView({ block: 'center' });
+      errorBox.scrollIntoView({ block: 'center' });   // スマホだとエラーが見えないので
       return;
     }
 
@@ -119,7 +134,8 @@ export async function formView({ params, go }) {
       if (file) {
         submit.textContent = 'アップロード中…';
         uploaded = `${myId()}/${crypto.randomUUID()}.pdf`;
-        // file.type が空のブラウザがある。バケットは application/pdf しか通さない
+        // file.typeが空になるブラウザがある
+        // バケットはapplication/pdfしか通さないので作り直す
         const body = file.type === 'application/pdf' ? file : new File([file], file.name, { type: 'application/pdf' });
         const up = await sb.storage.from(BUCKET).upload(uploaded, body, { contentType: 'application/pdf', upsert: false });
         if (up.error) throw up.error;
@@ -132,10 +148,16 @@ export async function formView({ params, go }) {
       let id = s?.id;
       if (s) {
         const { error } = await sb.from('scripts').update(values).eq('id', s.id);
-        if (error) throw error;
-        if (uploaded) {
-          const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
-          if (rmErr) console.warn(rmErr); // 残ったファイルは backup.py が一覧にする
+        if (!error) {
+          if (uploaded) {
+            // 差し替えたら前のPDFは消す
+            const { error: rmErr } = await sb.storage.from(BUCKET).remove([s.pdf_path]);
+            if (rmErr) {
+              console.warn(rmErr); // 消せなくて残ったファイルはbackup.pyが一覧にしてくれる
+            }
+          }
+        } else {
+          throw error;
         }
       } else {
         const { data, error } = await sb.from('scripts').insert(values).select('id').single();
@@ -147,6 +169,7 @@ export async function formView({ params, go }) {
       go(`/s/${id}`);
     } catch (err) {
       console.error(err);
+      // 途中で失敗したら上げたPDFを消しとく
       if (uploaded) await sb.storage.from(BUCKET).remove([uploaded]);
       errorBox.replaceChildren(notice('error', errText(err)));
     } finally {
@@ -162,6 +185,8 @@ export async function formView({ params, go }) {
   );
 }
 
+// 中身がPDFか確認（拡張子だけ.pdfにしたWordとかを弾く）
+// PDFはふつう先頭が %PDF- になってる
 async function checkPdf(file) {
   if (file.size > MAX_PDF_MB * 1024 * 1024) return `PDFが大きすぎます（${fmtSize(file.size)}）。${MAX_PDF_MB}MBまで`;
   const head = String.fromCharCode(...new Uint8Array(await file.slice(0, 5).arrayBuffer()));
@@ -169,6 +194,7 @@ async function checkPdf(file) {
   return null;
 }
 
+// ファイル名に使えない文字を_にする
 function safeFilename(name) {
   const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim() || 'script.pdf';
   const withExt = /\.pdf$/i.test(cleaned) ? cleaned : `${cleaned}.pdf`;

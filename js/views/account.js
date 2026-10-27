@@ -15,6 +15,7 @@ export async function accountView({ go }) {
       h('p', { class: 'links' }, h('a', { href: '#/?mine=1' }, '自分の投稿'), h('a', { href: '#/?liked=1' }, 'いいねした脚本')),
     );
   } else {
+    // まだメンバーじゃない人（登録のとき招待コード間違えた人とか）はここで入れ直せる
     const code = h('input', { type: 'text', autocomplete: 'off' });
     const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'メンバーになる');
     const msg = h('div', { role: 'alert' });
@@ -26,33 +27,47 @@ export async function accountView({ go }) {
           e.preventDefault();
           await busy(submit, '確認中…', async () => {
             const { data, error } = await sb.rpc('redeem_invite', { p_code: code.value.trim() });
-            if (error) return msg.replaceChildren(notice('error', errText(error)));
-            if (!data) return msg.replaceChildren(notice('error', '招待コードが違います'));
-            await refreshProfile();
-            toast('メンバーになりました');
-            go('/');
+            if (!error) {
+              if (data) {
+                await refreshProfile();
+                toast('メンバーになりました');
+                go('/');
+              } else {
+                msg.replaceChildren(notice('error', '招待コードが違います'));
+              }
+            } else {
+              msg.replaceChildren(notice('error', errText(error)));
+            }
           });
         },
       }, field('招待コード', code), msg, h('div', { class: 'form-actions' }, submit)),
     );
   }
 
+  // 名前の変更
   const name = h('input', { type: 'text', maxlength: 30, value: p?.display_name ?? '', required: true });
   const nameBtn = h('button', { type: 'submit', class: 'btn' }, '変更');
   const nameForm = h('form', {
     onsubmit: async (e) => {
-      e.preventDefault();
-      const value = name.value.trim();
-      if (!value) return toast('名前が空です', 'error');
-      await busy(nameBtn, '保存中…', async () => {
-        const { error } = await sb.from('profiles').update({ display_name: value }).eq('id', state.user.id);
-        if (error) return toast(errText(error), 'error');
-        await refreshProfile();
-        toast('変更しました');
-      });
+        e.preventDefault();
+        const value = name.value.trim();
+        if (value) {
+          await busy(nameBtn, '保存中…', async () => {
+            const { error } = await sb.from('profiles').update({ display_name: value }).eq('id', state.user.id);
+            if (error) {
+              toast(errText(error), 'error');
+            } else {
+              await refreshProfile();
+              toast('変更しました');
+            }
+          });
+        } else {
+          toast('名前が空です', 'error');
+        }
     },
-  }, field('名前', name, { help: '脚本の「筆者」とは別で、コメントやメニューに出る名前です' }), h('div', { class: 'form-actions' }, nameBtn));
+  }, field('名前', name), h('div', { class: 'form-actions' }, nameBtn));
 
+  // パスワードの変更
   const pw = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8 });
   const pwBtn = h('button', { type: 'submit', class: 'btn' }, '変更');
   const pwForm = h('form', {
@@ -75,7 +90,7 @@ export async function accountView({ go }) {
         await sb.auth.signOut();
         await setUser(null);
         go('/');
-      });
+      })
     },
   }, 'ログアウト');
 

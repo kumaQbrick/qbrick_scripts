@@ -2,6 +2,8 @@ import { sb } from '../lib/supabase.js';
 import { isAdmin, myId, refreshProfile } from '../lib/state.js';
 import { h, field, errText, toast, notice, busy, fmtDate, fmtDateTime } from '../lib/ui.js';
 
+// 管理ページ
+// ※画面で隠してるだけじゃなくてDB側（RLS）でも止めてる
 export async function adminView({ rerender }) {
   if (!isAdmin()) {
     return h('section', { class: 'page narrow' }, h('h1', {}, '管理'), h('p', {}, '管理者だけのページです。'));
@@ -40,11 +42,15 @@ async function inviteBlock() {
         e.preventDefault();
         await busy(btn, '保存中…', async () => {
           const { error: err } = await sb.rpc('admin_set_invite_code', { p_code: input.value });
-          if (err) return toast(errText(err), 'error');
-          toast('招待コードを変えました');
-          input.value = '';
-          ({ data: current } = await sb.rpc('admin_get_invite_code'));
-          if (visible) shown.textContent = current;
+          if (err) {
+            toast(errText(err), 'error');
+          } else {
+            toast('招待コードを変えました');
+            input.value = '';
+            // 変えたあと表示を新しいのにする
+            ({ data: current } = await sb.rpc('admin_get_invite_code'));
+            if (visible) shown.textContent = current;
+          }
         });
       },
     },
@@ -59,29 +65,47 @@ async function usersBlock(rerender) {
   if (error) return h('section', { class: 'block' }, h('h2', {}, 'ユーザー'), notice('error', errText(error)));
 
   const rows = users.map((u) => {
+    // メンバーのチェック
     const member = h('input', {
       type: 'checkbox', checked: u.is_member || u.is_admin, disabled: u.is_admin,
       'aria-label': `${u.display_name} をメンバーにする`,
       onchange: async (e) => {
         const value = e.target.checked;
-        if (!value && !confirm(`${u.display_name} をメンバーから外しますか？`)) { e.target.checked = true; return; }
-        const { error: err } = await sb.rpc('admin_set_member', { p_user_id: u.id, p_value: value });
-        if (err) { toast(errText(err), 'error'); e.target.checked = !value; }
+        if (value || confirm(`${u.display_name} をメンバーから外しますか？`)) {
+          const { error: err } = await sb.rpc('admin_set_member', { p_user_id: u.id, p_value: value });
+          if (err) {
+            toast(errText(err), 'error');
+            e.target.checked = !value;
+          }
+        } else {
+          e.target.checked = true;
+        }
       },
     });
+    // 管理者のチェック
     const admin = h('input', {
       type: 'checkbox', checked: u.is_admin,
       'aria-label': `${u.display_name} を管理者にする`,
       onchange: async (e) => {
         const value = e.target.checked;
-        const msg = value
-          ? `${u.display_name} を管理者にしますか？ 匿名コメントの投稿者や全員のメールアドレスが見えるようになります。`
-          : `${u.display_name} を管理者から外しますか？`;
-        if (!confirm(msg)) { e.target.checked = !value; return; }
-        const { error: err } = await sb.rpc('admin_set_admin', { p_user_id: u.id, p_value: value });
-        if (err) { toast(errText(err), 'error'); e.target.checked = !value; return; }
-        if (u.id === myId()) await refreshProfile();
-        rerender();
+        let msg;
+        if (value) {
+          msg = `${u.display_name} を管理者にしますか？ 匿名コメントの投稿者や全員のメールアドレスが見えるようになります。`;
+        } else {
+          msg = `${u.display_name} を管理者から外しますか？`;
+        }
+        if (confirm(msg)) {
+          const { error: err } = await sb.rpc('admin_set_admin', { p_user_id: u.id, p_value: value });
+          if (!err) {
+            if (u.id === myId()) await refreshProfile(); // 自分を外したとき用
+            rerender();
+          } else {
+            toast(errText(err), 'error');
+            e.target.checked = !value;
+          }
+        } else {
+          e.target.checked = !value;
+        }
       },
     });
     return h('tr', {},
@@ -116,6 +140,7 @@ async function commentsBlock() {
   );
 
   async function load() {
+    // 最新50件だけ。足りなかったら増やす
     const { data, error } = await sb
       .from('comments')
       .select('id, body, is_anonymous, created_at, script_id, script:scripts(title), ca:comment_authors(user_id, user:profiles(display_name))')
@@ -125,6 +150,7 @@ async function commentsBlock() {
     if (!data.length) return list.replaceChildren(h('li', { class: 'muted' }, 'まだありません'));
 
     list.replaceChildren(...data.map((c) => {
+      // 配列で返ってくるときと1個で返ってくるときがある？ので両方対応
       const ca = Array.isArray(c.ca) ? c.ca[0] : c.ca;
       const who = ca?.user?.display_name ?? '退会した人';
       return h('li', { class: 'comment' },
@@ -135,9 +161,14 @@ async function commentsBlock() {
           h('button', {
             type: 'button', class: 'link-btn',
             onclick: async () => {
-              if (!confirm('このコメントを消しますか？')) return;
-              const { error: err } = await sb.from('comments').delete().eq('id', c.id);
-              if (err) toast(errText(err), 'error'); else load();
+              if (confirm('このコメントを消しますか？')) {
+                const { error: err } = await sb.from('comments').delete().eq('id', c.id);
+                if (err) {
+                  toast(errText(err), 'error');
+                } else {
+                  load();
+                }
+              }
             },
           }, '削除'),
         ),

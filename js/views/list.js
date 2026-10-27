@@ -3,6 +3,7 @@ import { sb } from '../lib/supabase.js';
 import { isLoggedIn, isMember, myId } from '../lib/state.js';
 import { h, icon, cover, lengthText, errText, notice, toast } from '../lib/ui.js';
 
+// 並び順。order は [列, 昇順か]
 const SORTS = {
   new:      { label: '新しい順', order: [['created_at', false]] },
   updated:  { label: '更新順', order: [['updated_at', false]] },
@@ -11,6 +12,7 @@ const SORTS = {
   title:    { label: 'タイトル順', order: [['title', true]] },
 };
 
+// 一覧で使う列だけ（*にするとあらすじまで全部とってきて重い）
 const COLUMNS = 'id, title, author_name, genres, length_category, runtime_minutes, status, visibility, like_count, comment_count, created_at';
 
 export async function listView({ query, go }) {
@@ -26,16 +28,24 @@ export async function listView({ query, go }) {
   };
   const filtered = !!(f.q || f.genre || f.length || f.status || f.perm || f.mine || f.liked);
 
-  // 条件は URL に入れる（そのまま共有できるように）
+  // 条件はURLに入れる（そのままLINEとかで共有できるように）
   function setFilter(patch) {
     const next = { ...f, ...patch };
     const p = new URLSearchParams();
-    for (const key of ['q', 'genre', 'length', 'status', 'perm']) if (next[key]) p.set(key, next[key]);
+    for (const key of ['q', 'genre', 'length', 'status', 'perm']) {
+      if (next[key]) {
+        p.set(key, next[key]);
+      }
+    }
     if (next.sort !== 'new') p.set('sort', next.sort);
     if (next.mine) p.set('mine', '1');
     if (next.liked) p.set('liked', '1');
     const qs = p.toString();
-    go(qs ? `/?${qs}` : '/');
+    if (qs) {
+      go(`/?${qs}`);
+    } else {
+      go('/');
+    }
   }
 
   const search = h('input', { type: 'search', value: f.q, placeholder: 'タイトル・筆者・あらすじ', 'aria-label': '検索' });
@@ -74,22 +84,30 @@ export async function listView({ query, go }) {
   const grid = h('ol', { class: 'shelf' });
   const more = h('button', { type: 'button', class: 'btn shelf-more', hidden: true }, 'もっと見る');
 
+  // いいねした脚本のとき、先にidを全部とってくる
   let likedIds = null;
   if (f.liked) {
     const { data, error } = await sb.from('likes').select('script_id').eq('user_id', myId());
     if (error) throw error;
-    likedIds = data.map((r) => r.script_id);
+    likedIds = data.map(r => r.script_id);
   }
 
   function fetchPage(offset) {
     let q = sb.from('scripts').select(COLUMNS, { count: 'exact' });
-    if (f.genre) q = q.contains('genres', [f.genre]);
+    if (f.genre)  q = q.contains('genres', [f.genre]);
     if (f.length) q = q.eq('length_category', f.length);
     if (f.status) q = q.eq('status', f.status);
-    if (f.perm) q = q.eq('usage_permission', f.perm);
-    if (f.mine) q = q.eq('owner_id', myId());
-    if (likedIds) q = q.in('id', likedIds.length ? likedIds : ['00000000-0000-0000-0000-000000000000']);
-    // or() の区切り文字になる記号は消しておく
+    if (f.perm)   q = q.eq('usage_permission', f.perm);
+    if (f.mine)   q = q.eq('owner_id', myId());
+    if (likedIds) {
+      if (likedIds.length) {
+        q = q.in('id', likedIds);
+      } else {
+        // いいね0のとき。ありえないidを入れて0件にする
+        q = q.in('id', ['00000000-0000-0000-0000-000000000000']);
+      }
+    }
+    // or()の区切り文字になる記号は消しとく（, とか入ると壊れる）
     const words = f.q.replace(/[,()"'\\%*:]/g, ' ').trim();
     if (words) q = q.or(`title.ilike.%${words}%,author_name.ilike.%${words}%,synopsis.ilike.%${words}%`);
     for (const [col, asc] of SORTS[f.sort].order) q = q.order(col, { ascending: asc });
@@ -97,6 +115,7 @@ export async function listView({ query, go }) {
   }
 
   let loaded = 0;
+  // 「もっと見る」で続きを読む
   async function loadMore() {
     const { data, error, count } = await fetchPage(loaded);
     if (error) throw error;
@@ -107,9 +126,13 @@ export async function listView({ query, go }) {
   }
 
   more.addEventListener('click', async () => {
-    more.disabled = true;
-    try { await loadMore(); } catch (err) { toast(errText(err), 'error'); }
-    more.disabled = false;
+      more.disabled = true;
+      try {
+          await loadMore();
+      } catch (err) {
+          toast(errText(err), 'error');
+      }
+      more.disabled = false;
   });
 
   await loadMore();

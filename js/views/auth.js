@@ -7,9 +7,11 @@ const MIN_PASSWORD = 8;
 const page = (title, ...children) =>
   h('section', { class: 'page narrow auth' }, h('h1', {}, title), ...children);
 
+// エラーが1個ならそのまま、2個以上なら箇条書き
 const showErrors = (box, list) =>
   box.replaceChildren(notice('error', list.length > 1 ? h('ul', {}, ...list.map((p) => h('li', {}, p))) : list[0]));
 
+/* ===== ログイン ===== */
 export async function loginView({ go }) {
   if (isLoggedIn()) {
     return page('ログイン', h('p', {}, `${state.profile?.display_name ?? ''} でログイン中です。`), h('p', {}, h('a', { href: '#/' }, '一覧へ')));
@@ -41,6 +43,7 @@ export async function loginView({ go }) {
   );
 }
 
+/* ===== 登録 ===== */
 export async function signupView({ go }) {
   if (isLoggedIn()) return loginView({ go });
 
@@ -60,42 +63,48 @@ export async function signupView({ go }) {
       if (!email.value.trim()) problems.push('メールアドレスが空です');
       if (password.value.length < MIN_PASSWORD) problems.push(`パスワードは${MIN_PASSWORD}文字以上`);
       if (!code.value.trim()) problems.push('招待コードが空です');
-      if (problems.length) return showErrors(msg, problems);
 
-      await busy(submit, '登録中…', async () => {
-        const { data, error } = await sb.auth.signUp({
-          email: email.value.trim(),
-          password: password.value,
-          options: {
-            // 招待コードは DB のトリガー（handle_new_user）で照合する
-            data: { display_name: name.value.trim(), invite_code: code.value.trim() },
-            emailRedirectTo: siteUrl(),
-          },
-        });
-        if (error) return showErrors(msg, [errText(error)]);
-
-        if (data.session) {
-          // Supabase でメール確認をオフにしているとここに来る
-          await setUser(data.user);
-          if (isMember()) {
-            go('/');
+      if (problems.length == 0) {
+        await busy(submit, '登録中…', async () => {
+          const { data, error } = await sb.auth.signUp({
+            email: email.value.trim(),
+            password: password.value,
+            options: {
+              // 招待コードはDBのトリガー（handle_new_user）で照合してる
+              data: { display_name: name.value.trim(), invite_code: code.value.trim() },
+              emailRedirectTo: siteUrl(),
+            },
+          });
+          if (!error) {
+            if (data.session) {
+              // Supabaseでメール確認をオフにしてるとここに来る
+              await setUser(data.user);
+              if (isMember()) {
+                go('/');
+              } else {
+                toast('招待コードが違ったので、まだメンバーになっていません', 'error');
+                go('/account');
+              }
+            } else {
+              // メール確認オンのとき
+              form.replaceWith(h('div', {},
+                h('p', {}, `${email.value.trim()} に確認メールを送りました。リンクを開くと登録完了です。`),
+                h('p', { class: 'muted' }, '来ないときは迷惑メールも見てください。'),
+              ));
+            }
           } else {
-            toast('招待コードが違ったので、まだメンバーになっていません', 'error');
-            go('/account');
+            showErrors(msg, [errText(error)]);
           }
-        } else {
-          form.replaceWith(h('div', {},
-            h('p', {}, `${email.value.trim()} に確認メールを送りました。リンクを開くと登録完了です。`),
-            h('p', { class: 'muted' }, '来ないときは迷惑メールも見てください。'),
-          ));
-        }
-      });
+        });
+      } else {
+        showErrors(msg, problems);
+      }
     },
   },
-    field('名前', name, { help: 'コメントなどに出ます。あとで変えられます' }),
+    field('名前', name),
     field('メールアドレス', email),
     field('パスワード', password, { help: `${MIN_PASSWORD}文字以上` }),
-    field('招待コード', code, { help: '管理者に聞いてください' }),
+    field('招待コード', code),
     msg,
     h('div', { class: 'form-actions' }, submit),
   );
@@ -103,27 +112,30 @@ export async function signupView({ go }) {
   return page('登録', form, h('p', { class: 'auth__alt' }, 'アカウントがある人は ', h('a', { href: '#/login' }, 'ログイン')));
 }
 
+/* ===== パスワード忘れた ===== */
 export async function resetView() {
-  const email = h('input', { type: 'email', autocomplete: 'email', required: true });
-  const msg = h('div', { role: 'alert' });
-  const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'メールを送る');
-  const form = h('form', {
-    onsubmit: async (e) => {
-      e.preventDefault();
-      await busy(submit, '送信中…', async () => {
-        const { error } = await sb.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: siteUrl() });
-        if (error) return showErrors(msg, [errText(error)]);
-        form.replaceWith(h('p', {}, '登録済みのアドレスなら、再設定のメールが届きます。'));
-      });
+    const email = h('input', { type: 'email', autocomplete: 'email', required: true });
+    const msg = h('div', { role: 'alert' });
+    const submit = h('button', { type: 'submit', class: 'btn btn--ink' }, 'メールを送る');
+    const form = h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        await busy(submit, '送信中…', async () => {
+          const { error } = await sb.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: siteUrl() });
+          if (error) return showErrors(msg, [errText(error)]);
+          // 登録されてないアドレスでも同じ表示にする（登録してるかどうか分からないように）
+          form.replaceWith(h('p', {}, '登録済みのアドレスなら、再設定のメールが届きます。'));
+        });
+      },
     },
-  },
-    field('登録したメールアドレス', email),
-    msg,
-    h('div', { class: 'form-actions' }, submit),
-  );
-  return page('パスワード再設定', form);
+      field('登録したメールアドレス', email),
+      msg,
+      h('div', { class: 'form-actions' }, submit),
+    );
+    return page('パスワード再設定', form);
 }
 
+// メールのリンクから来たとき
 export async function newPasswordView({ go }) {
   if (!isLoggedIn()) {
     return page('新しいパスワード',
@@ -137,13 +149,19 @@ export async function newPasswordView({ go }) {
     h('form', {
       onsubmit: async (e) => {
         e.preventDefault();
-        if (password.value.length < MIN_PASSWORD) return showErrors(msg, [`${MIN_PASSWORD}文字以上にしてください`]);
-        await busy(submit, '変更中…', async () => {
-          const { error } = await sb.auth.updateUser({ password: password.value });
-          if (error) return showErrors(msg, [errText(error)]);
-          toast('パスワードを変えました');
-          go('/');
-        });
+        if (password.value.length >= MIN_PASSWORD) {
+          await busy(submit, '変更中…', async () => {
+            const { error } = await sb.auth.updateUser({ password: password.value });
+            if (error) {
+              showErrors(msg, [errText(error)]);
+            } else {
+              toast('パスワードを変えました');
+              go('/');
+            }
+          });
+        } else {
+          showErrors(msg, [`${MIN_PASSWORD}文字以上にしてください`]);
+        }
       },
     },
       field('新しいパスワード', password, { help: `${MIN_PASSWORD}文字以上` }),

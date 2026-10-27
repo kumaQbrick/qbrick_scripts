@@ -22,28 +22,30 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TABLES = ["profiles", "scripts", "likes", "comments", "comment_authors", "app_secrets"]
+TABLES = ["profiles", "scripts", "likes", "comments", "comment_authors", "app_secrets"]  # テーブル増やしたらここにも足す
 BUCKET = "scripts"
-PAGE = 1000
+PAGE = 1000   # supabaseは1回1000件まで
 
 
+# .envを読む（python-dotenv入れたくなかったので自分で書いた）
 def load_env() -> tuple[str, str]:
-    env_file = Path(__file__).resolve().parent / ".env"
-    values = dict(os.environ)
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            values.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-    url = values.get("SUPABASE_URL", "").rstrip("/")
-    key = values.get("SUPABASE_SECRET_KEY", "")
-    if not url or not key:
-        sys.exit("SUPABASE_URL と SUPABASE_SECRET_KEY を tools/.env か環境変数に設定してください。")
-    if key.startswith("sb_publishable_"):
-        sys.exit("Publishable key ではなく Secret key（sb_secret_ で始まるもの）を設定してください。")
-    return url, key
+  env_file = Path(__file__).resolve().parent / ".env"
+  values = dict(os.environ)
+  if env_file.exists():
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+      line = line.strip()
+      if line and not line.startswith("#"):
+        if "=" in line:
+          key, value = line.split("=", 1)
+          values.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+  url = values.get("SUPABASE_URL", "").rstrip("/")
+  key = values.get("SUPABASE_SECRET_KEY", "")
+  if not url or not key:
+    sys.exit("SUPABASE_URL と SUPABASE_SECRET_KEY を tools/.env か環境変数に設定してください。")
+  # publishableだとRLSで止められて全部は取れない
+  if key.startswith("sb_publishable_"):
+    sys.exit("Publishable key ではなく Secret key（sb_secret_ で始まるもの）を設定してください。")
+  return url, key
 
 
 class Client:
@@ -61,8 +63,8 @@ class Client:
             with urllib.request.urlopen(req, timeout=120) as res:
                 return res.read(), dict(res.headers)
         except urllib.error.HTTPError as e:
-            detail = e.read().decode(errors="replace")[:500]
-            raise RuntimeError(f"{method} {path} が失敗しました（{e.code}）: {detail}") from None
+            detail = e.read().decode(errors="replace")[:500]   # 長すぎるので切る
+            raise RuntimeError("%s %s が失敗しました（%s）: %s" % (method, path, e.code, detail)) from None
 
     def json(self, method: str, path: str, **kw):
         raw, _ = self.request(method, path, **kw)
@@ -70,9 +72,11 @@ class Client:
 
 
 def dump_table(c: Client, table: str) -> list:
-    rows, offset = [], 0
+    rows = []
+    offset = 0
     while True:
         batch = c.json("GET", f"/rest/v1/{table}?select=*&limit={PAGE}&offset={offset}")
+        #print(table, offset, len(batch))
         rows.extend(batch)
         if len(batch) < PAGE:
             return rows
@@ -83,7 +87,11 @@ def dump_users(c: Client) -> list:
     users, page = [], 1
     while True:
         res = c.json("GET", f"/auth/v1/admin/users?page={page}&per_page=100")
-        batch = res.get("users", []) if isinstance(res, dict) else res
+        # dictで返ってくるときとlistで返ってくるときがある？
+        if isinstance(res, dict):
+            batch = res.get("users", [])
+        else:
+            batch = res
         users.extend(
             {k: u.get(k) for k in ("id", "email", "created_at", "last_sign_in_at", "email_confirmed_at")}
             for u in batch
@@ -93,6 +101,7 @@ def dump_users(c: Client) -> list:
         page += 1
 
 
+# Storageのファイルを全部たどる（フォルダの中も）
 def list_objects(c: Client, prefix: str = "") -> list[str]:
     found, offset = [], 0
     while True:
@@ -110,6 +119,7 @@ def list_objects(c: Client, prefix: str = "") -> list[str]:
 
 
 def download(c: Client, path: str, dest: Path) -> int:
+    # パスに変な文字が入っても大丈夫なようにquoteする（/はそのまま）
     quoted = "/".join(urllib.parse.quote(part) for part in path.split("/"))
     raw, _ = c.request("GET", f"/storage/v1/object/{BUCKET}/{quoted}")
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -132,9 +142,9 @@ def main() -> None:
     summary = {"created_at": datetime.now().isoformat(timespec="seconds"), "supabase_url": url, "tables": {}}
     for table in TABLES:
         rows = dump_table(c, table)
-        (out / f"{table}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+        (out / f"{table}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")  # ensure_ascii=Falseないと日本語が\uになる
         summary["tables"][table] = len(rows)
-        print(f"  {table}: {len(rows)}件")
+        print("  " + table + ": " + str(len(rows)) + "件")
 
     users = dump_users(c)
     (out / "auth_users.json").write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -150,8 +160,9 @@ def main() -> None:
             try:
                 total += download(c, s["pdf_path"], out / "pdfs" / s["pdf_path"])
             except RuntimeError as e:
+                # 1個失敗しても止めないで最後にまとめて出す
                 failed.append({"script_id": s["id"], "title": s["title"], "error": str(e)})
-            print(f"\r  PDF: {i}/{len(scripts)}", end="", flush=True)
+            print(f"\r  PDF: {i}/{len(scripts)}", end="", flush=True)  # \rで同じ行に上書き
         print()
         summary["pdfs"] = {"downloaded": len(scripts) - len(failed), "bytes": total, "failed": failed}
         for f in failed:

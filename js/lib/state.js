@@ -13,18 +13,17 @@ export async function setUser(user) {
 export async function refreshProfile() {
   state.profile = null;
   if (state.user) {
-    const { data, error } = await sb
-      .from('profiles')
+    const { data, error } = await sb.from('profiles')
       .select('id, display_name, is_member, is_admin, created_at')
       .eq('id', state.user.id)
       .maybeSingle();
     if (error) console.error(error);
     state.profile = data ?? null;
   }
-  listeners.forEach((fn) => fn(state));
+  listeners.forEach(fn => fn(state));
 }
 
 export const isLoggedIn = () => !!state.user;
-export const isMember = () => !!(state.profile?.is_member || state.profile?.is_admin);
+export const isMember = () => !!(state.profile?.is_member || state.profile?.is_admin); // 管理者はメンバー扱い
 export const isAdmin = () => !!state.profile?.is_admin;
 export const myId = () => state.user?.id ?? null;
