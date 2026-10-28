@@ -1,6 +1,6 @@
 # 脚本棚
 
-熊大映研 Qbrick 制作班の脚本置き場。https://kirikiri-p.github.io/Qbrick_scripts/
+熊大映研 Qbrick 制作班の脚本置き場。https://kumaqbrick.github.io/qbrick_scripts/
 
 - 画面: 素の HTML / CSS / JS（ビルドなし）。GitHub Pages で公開
 - DB・ログイン・PDF: Supabase（無料プラン）

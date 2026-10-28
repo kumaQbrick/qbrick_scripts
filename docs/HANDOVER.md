@@ -6,12 +6,12 @@
 |---|---|
 | 管理者 | |
 | 副管理者 | |
-| GitHub | kirikiri-p / Qbrick_scripts |
-| Supabase | kirikiri-p's Project（xmeerhhimlsskljswnlk） |
-| サイト | https://kirikiri-p.github.io/Qbrick_scripts/ |
-| 最後のバックアップ | |
+| GitHub | kumaQbrick / Qbrick_scripts |
+| Supabase | qbrick_scripts（dspajwhgojljjswmrnvo） |
+| サイト | https://kumaqbrick.github.io/qbrick_scripts/ |
+| 最後のバックアップ |  |
 
-今は GitHub も Supabase も個人アカウントの持ち物になっている。卒業前に、サークル用アカウントか次の管理者に移すこと。
+卒業前に、次の管理者に移すこと。
 
 ## 代替わり
 
@@ -38,11 +38,20 @@ python3 tools/backup.py
 
 | 症状 | だいたいの原因 |
 |---|---|
-| 何も読み込めない | 1週間アクセスがなくて Supabase が止まった → ダッシュボードで Restore |
+| 何も読み込めない | 1週間アクセスがなくて Supabase が止まった → ダッシュボードで Resume project。止まらないように GitHub Actions で毎日アクセスしている（下の「Supabase を止めない仕組み」）ので、そちらも確認 |
 | 確認メールが来ない | 標準のメール送信の上限。README の「確認メールについて」 |
 | メールのリンクで変な所に飛ぶ | Site URL / Redirect URLs がサイトのURLと違う |
 | PDF が出ない | 「別タブで開く」で読めるか確認。だめなら投稿者に上げ直してもらう |
 | 古い画面のまま | ブラウザのキャッシュ。Ctrl+Shift+R |
+
+## Supabase を止めない仕組み
+
+無料プランは、1週間ほど DB へのアクセスが少ないと一時停止する（止まる1週間くらい前に警告メールが来る）。夏休みなど誰も使わない時期に止まらないよう、`.github/workflows/keepalive.yml` が毎日2回（日本時間 9:23 と 21:23）公開の脚本を1件読みに行っている。お金はかからない（公開リポジトリの GitHub Actions は無料）。
+
+- 動いているかは GitHub の Actions タブで見る。「Run workflow」で手動でも動かせる
+- 失敗すると、そのワークフローを最後にいじった人に GitHub からメールが届く
+- **注意**: 公開リポジトリでは、60日間リポジトリに動きがないと、GitHub が定期実行を自動で止める。止まる前に GitHub からメールが来るので、来たら Actions タブで「Enable workflow」を押す。代替わりのときにも、動いているか見ておく
+- 止まってしまっても、1年以内ならダッシュボードの Resume project で元に戻せる（データも戻る）
 
 ## 仕組みのメモ
 
@@ -71,7 +80,7 @@ python3 tools/backup.py
 
 ### 無料プランの上限（2026年10月時点の公式料金ページ。変わることがある）
 
-- 1週間アクセスがないと一時停止
+- 1週間アクセスが少ないと一時停止（keepalive で防いでいる）
 - ファイル 1GB（1ファイル 50MB。このサイトでは 20MB に制限）、DB 500MB
 - Usage 画面で使用量が見られる。PDF が1本 1MB 前後なら 900本くらいまで入る
 
