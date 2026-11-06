@@ -107,6 +107,26 @@ export async function detailView({ params, go }) {
   const perm = PERMISSIONS[s.usage_permission];
   const updated = fmtDate(s.updated_at) !== fmtDate(s.created_at) ? fmtDate(s.updated_at) : null;
 
+  // 筆者は自由に書けるので、管理者にはどのアカウントから投稿されたか出す
+  // メールもほしいのでadmin_list_usersから探す（人数少ないので全部とってきても平気）
+  let ownerFact = null;
+  if (isAdmin()) {
+    let who;
+    if (!s.owner_id) {
+      who = '退会した人';
+    } else {
+      const { data: users, error: usersErr } = await sb.rpc('admin_list_users');
+      const owner = (users ?? []).find((u) => u.id === s.owner_id);
+      if (usersErr) who = errText(usersErr);
+      else if (owner) who = [owner.display_name, h('small', {}, owner.email ?? '')];
+      else who = '見つかりません';
+    }
+    ownerFact = h('div', { class: 'facts__admin' },
+      h('dt', {}, '投稿アカウント'),
+      h('dd', {}, who, h('small', {}, '管理者にだけ見えています')),
+    );
+  }
+
   const aside = h('aside', { class: 'detail__aside' },
     cover(s, { large: true }),
     likeBox,
@@ -117,6 +137,7 @@ export async function detailView({ params, go }) {
       fact('使っていい？', perm?.label ?? s.usage_permission),
       fact('公開', VISIBILITIES[s.visibility]?.label ?? s.visibility),
       fact('投稿', fmtDate(s.created_at) + (updated ? `（更新 ${updated}）` : '')),
+      ownerFact,
     ),
     (canEdit || canDelete) && h('div', { class: 'detail__owner' },
       canEdit && h('a', { class: 'btn', href: `#/edit/${s.id}` }, '編集'),

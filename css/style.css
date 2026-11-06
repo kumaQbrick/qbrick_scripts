@@ -300,6 +300,7 @@ input[type=checkbox], input[type=radio] { width: 17px; height: 17px; margin: 0; 
 .facts dt { color: var(--gray); }
 .facts dd { margin: 0; }
 .facts small { display: block; color: var(--gray); }
+.facts > .facts__admin { background: var(--gold-soft); padding-left: 6px; padding-right: 6px; } /* 管理者だけの行 */
 .prose .facts > div { grid-template-columns: minmax(8em, 13em) 1fr; }
 
 .like { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
